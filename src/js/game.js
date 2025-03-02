@@ -21,6 +21,7 @@ class Game {
         this.projectiles = [];
         this.trees = [];
         this.upgrades = [];
+        this.clones = []; // Added to track player clones
         
         // Game settings
         this.enemyKills = 0; // Track enemy kills
@@ -32,6 +33,15 @@ class Game {
         this.lastSpawnTime = 0;
         this.lastUpgradeTime = 0;
         this.playerMovementEnabled = true;
+        this.maxClones = 5; // Maximum number of clones allowed
+        
+        // Difficulty progression
+        this.gameStartTime = Date.now();
+        this.currentWave = 1;
+        this.waveChangeTime = 30000; // 30 seconds per wave
+        this.lastWaveChangeTime = this.gameStartTime;
+        this.maxWave = 10; // Cap difficulty at wave 10
+        this.bossWaves = [5, 10]; // Waves that spawn boss enemies
         
         // Player movement
         this.keyStates = {
@@ -53,7 +63,7 @@ class Game {
                 projectileColor: 0xffff00,
                 projectileSpeed: 40,
                 damage: 1,
-                fireRate: 300,
+                fireRate: 200,
                 trailColor: 0xffaa00,
                 glowColor: 0xffff88
             },
@@ -70,8 +80,8 @@ class Game {
                 model: null,
                 projectileColor: 0xff0000,
                 projectileSpeed: 30,
-                damage: 3,
-                fireRate: 800,
+                damage: 5,
+                fireRate: 1000,
                 trailColor: 0xff4400,
                 glowColor: 0xff8888
             }
@@ -93,6 +103,7 @@ class Game {
         // Create UI elements
         this.createKillCounter();
         this.createHealthBar(); // Add health bar
+        this.createWaveIndicator(); // Add wave indicator
         
         // Clean up any external UI elements
         this.cleanupExternalUI();
@@ -506,20 +517,29 @@ class Game {
         this.scene.add(treeGroup);
     }
     
-    spawnEnemy() {
+    spawnEnemy(isBoss = false) {
         console.log("Spawning enemy");
         
         // Create enemy group
         const enemyGroup = new THREE.Group();
         
+        // Difficulty scaling factors
+        const waveScaling = Math.min(this.currentWave / 2, 5); // Scale up to 5x for max difficulty
+        const healthScaling = Math.min(1 + (this.currentWave - 1) * 0.3, 3); // Up to 3x health
+        const speedScaling = Math.min(1 + (this.currentWave - 1) * 0.1, 1.5); // Up to 1.5x speed
+        
         // Body
-        const bodyGeometry = new THREE.CapsuleGeometry(0.5, 1, 4, 8);
+        const bodyGeometry = new THREE.CapsuleGeometry(
+            isBoss ? 0.8 : 0.5, 
+            isBoss ? 1.5 : 1, 
+            4, 8
+        );
         const bodyMaterial = new THREE.MeshStandardMaterial({ 
-            color: 0xe74c3c, // Red color
+            color: isBoss ? 0xff1111 : 0xe74c3c, // Brighter red for boss
             roughness: 0.7,
             metalness: 0.3,
-            emissive: 0x992d22,
-            emissiveIntensity: 0.5 // Increased glow
+            emissive: isBoss ? 0xcc0000 : 0x992d22,
+            emissiveIntensity: isBoss ? 0.8 : 0.5 // Increased glow for boss
         });
         
         const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
@@ -528,46 +548,113 @@ class Game {
         enemyGroup.add(body);
         
         // Head (hat)
-        const hatGeometry = new THREE.CylinderGeometry(0.2, 0.4, 0.4, 8);
+        const hatGeometry = new THREE.CylinderGeometry(
+            isBoss ? 0.3 : 0.2, 
+            isBoss ? 0.6 : 0.4, 
+            isBoss ? 0.6 : 0.4, 
+            8
+        );
         const hatMaterial = new THREE.MeshStandardMaterial({ 
-            color: 0xff0000,
-            emissive: 0xaa0000,
-            emissiveIntensity: 0.6
+            color: isBoss ? 0xff0000 : 0xff0000,
+            emissive: isBoss ? 0xff0000 : 0xaa0000,
+            emissiveIntensity: isBoss ? 0.9 : 0.6
         });
         const hat = new THREE.Mesh(hatGeometry, hatMaterial);
-        hat.position.set(0, 1.2, 0);
+        hat.position.set(0, isBoss ? 1.5 : 1.2, 0);
         hat.castShadow = true;
         enemyGroup.add(hat);
         
+        // Add boss-specific features
+        if (isBoss) {
+            // Add spikes to boss
+            for (let i = 0; i < 8; i++) {
+                const spikeGeometry = new THREE.ConeGeometry(0.2, 0.5, 4);
+                const spikeMaterial = new THREE.MeshStandardMaterial({
+                    color: 0xdd0000,
+                    emissive: 0xaa0000,
+                    emissiveIntensity: 0.7
+                });
+                
+                const spike = new THREE.Mesh(spikeGeometry, spikeMaterial);
+                const angle = (i / 8) * Math.PI * 2;
+                spike.position.set(
+                    Math.cos(angle) * 0.9,
+                    0.8,
+                    Math.sin(angle) * 0.9
+                );
+                spike.rotation.x = Math.PI / 2;
+                spike.rotation.z = angle;
+                enemyGroup.add(spike);
+            }
+            
+            // Add glowing eyes
+            const eyeGeometry = new THREE.SphereGeometry(0.1, 8, 8);
+            const eyeMaterial = new THREE.MeshBasicMaterial({
+                color: 0xffff00,
+                emissive: 0xffff00,
+                emissiveIntensity: 1
+            });
+            
+            const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+            leftEye.position.set(-0.3, 1.5, 0.5);
+            enemyGroup.add(leftEye);
+            
+            const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+            rightEye.position.set(0.3, 1.5, 0.5);
+            enemyGroup.add(rightEye);
+            
+            // Add glow effect
+            const glowGeometry = new THREE.SphereGeometry(1.5, 16, 16);
+            const glowMaterial = new THREE.MeshBasicMaterial({
+                color: 0xff3333,
+                transparent: true,
+                opacity: 0.2
+            });
+            const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+            glow.position.y = 0.7;
+            enemyGroup.add(glow);
+        }
+        
         // Arms
-        const armGeometry = new THREE.CapsuleGeometry(0.2, 0.6, 4, 8);
+        const armGeometry = new THREE.CapsuleGeometry(
+            isBoss ? 0.3 : 0.2, 
+            isBoss ? 0.9 : 0.6, 
+            4, 8
+        );
         const armMaterial = new THREE.MeshStandardMaterial({ 
-            color: 0xe74c3c,
-            emissive: 0xaa0000,
-            emissiveIntensity: 0.3
+            color: isBoss ? 0xff2222 : 0xe74c3c,
+            emissive: isBoss ? 0xcc0000 : 0xaa0000,
+            emissiveIntensity: isBoss ? 0.6 : 0.3
         });
         
         const leftArm = new THREE.Mesh(armGeometry, armMaterial);
-        leftArm.position.set(-0.5, 0.5, 0);
+        leftArm.position.set(isBoss ? -0.8 : -0.5, 0.5, 0);
         leftArm.rotation.z = -Math.PI / 4;
         leftArm.castShadow = true;
         enemyGroup.add(leftArm);
         
         const rightArm = new THREE.Mesh(armGeometry, armMaterial);
-        rightArm.position.set(0.5, 0.5, 0);
+        rightArm.position.set(isBoss ? 0.8 : 0.5, 0.5, 0);
         rightArm.rotation.z = Math.PI / 4;
         rightArm.castShadow = true;
         enemyGroup.add(rightArm);
         
         // Randomize position across the bridge width
         const xPos = (Math.random() - 0.5) * 8; // Spread across bridge width
-        enemyGroup.position.set(xPos, 1, -50); // Far end of the bridge
+        enemyGroup.position.set(xPos, isBoss ? 2 : 1, -50); // Far end of the bridge
         
-        // Store enemy properties - 3x faster
+        // Scale boss size
+        if (isBoss) {
+            enemyGroup.scale.set(1.5, 1.5, 1.5);
+        }
+        
+        // Store enemy properties with scaling based on wave
         enemyGroup.userData = {
-            speed: 0.24 + Math.random() * 0.12, // 3x faster enemies
-            health: 1,
-            type: 'enemy'
+            speed: (0.24 + Math.random() * 0.12) * speedScaling, // Scale speed with wave
+            health: isBoss ? (3 * healthScaling) : Math.ceil(1 * healthScaling), // Scale health with wave
+            type: 'enemy',
+            isBoss: isBoss,
+            damage: isBoss ? 15 : 5 // Bosses do more damage
         };
         
         this.scene.add(enemyGroup);
@@ -576,11 +663,11 @@ class Game {
         // Update enemy counter
         this.updateEnemyCounter();
         
-        console.log("Enemy spawned at position:", enemyGroup.position);
+        console.log(`${isBoss ? "Boss" : "Enemy"} spawned at position:`, enemyGroup.position);
     }
     
     spawnUpgrade() {
-        const upgradeTypes = ['laser', 'rocket', 'basic', 'healthkit']; // Add healthkit to possible upgrades
+        const upgradeTypes = ['laser', 'rocket', 'basic', 'healthkit', 'clone']; // Added clone upgrade
         const upgradeType = upgradeTypes[Math.floor(Math.random() * upgradeTypes.length)];
         
         // Create upgrade group
@@ -589,8 +676,10 @@ class Game {
         // Create base platform
         const baseGeometry = new THREE.BoxGeometry(1.5, 0.2, 1.5);
         const baseMaterial = new THREE.MeshStandardMaterial({ 
-            color: upgradeType === 'healthkit' ? 0xff4444 : 0x44aaff,
-            emissive: upgradeType === 'healthkit' ? 0xcc2222 : 0x0066cc,
+            color: upgradeType === 'healthkit' ? 0xff4444 : 
+                   upgradeType === 'clone' ? 0x44ffff : 0x44aaff,
+            emissive: upgradeType === 'healthkit' ? 0xcc2222 : 
+                      upgradeType === 'clone' ? 0x00cccc : 0x0066cc,
             emissiveIntensity: 0.3
         });
         
@@ -603,7 +692,8 @@ class Game {
         // Add floating effect with glow
         const glowGeometry = new THREE.SphereGeometry(1, 16, 16);
         const glowMaterial = new THREE.MeshBasicMaterial({
-            color: upgradeType === 'healthkit' ? 0xff6666 : 0x66ccff,
+            color: upgradeType === 'healthkit' ? 0xff6666 : 
+                   upgradeType === 'clone' ? 0x66ffff : 0x66ccff,
             transparent: true,
             opacity: 0.4
         });
@@ -621,6 +711,19 @@ class Game {
             // Add floating animation
             const animationStartY = 0.7;
             healthkitModel.userData.floatAnimation = {
+                startY: animationStartY,
+                phase: Math.random() * Math.PI * 2,
+                speed: 2 + Math.random()
+            };
+        } else if (upgradeType === 'clone') {
+            // Create clone model
+            const cloneModel = this.createCloneModel();
+            cloneModel.position.y = 0.7;
+            upgradeGroup.add(cloneModel);
+            
+            // Add floating animation
+            const animationStartY = 0.7;
+            cloneModel.userData.floatAnimation = {
                 startY: animationStartY,
                 phase: Math.random() * Math.PI * 2,
                 speed: 2 + Math.random()
@@ -777,7 +880,10 @@ class Game {
         this.projectiles.push(projectile);
         
         // Add glow effect appropriate for the weapon
-        const glowGeometry = new THREE.SphereGeometry(0.7, 12, 12);
+        const glowGeometry = new THREE.SphereGeometry(
+            this.currentWeapon === 'rocket' ? 1.0 : 0.7, // Larger glow for rocket
+            12, 12
+        );
         const glowMaterial = new THREE.MeshBasicMaterial({ 
             color: weaponConfig.glowColor,
             transparent: true,
@@ -793,8 +899,8 @@ class Game {
             // Thin, long laser beam
             trailGeometry = new THREE.CylinderGeometry(0.05, 0.05, 3, 8);
         } else if (this.currentWeapon === 'rocket') {
-            // Rocket exhaust
-            trailGeometry = new THREE.ConeGeometry(0.3, 2, 8);
+            // Rocket exhaust - now larger
+            trailGeometry = new THREE.ConeGeometry(0.4, 3, 8); // Increased from 0.3, 2 to 0.4, 3
         } else {
             // Default trail
             trailGeometry = new THREE.CylinderGeometry(0.1, 0.2, 2.5, 8);
@@ -810,6 +916,144 @@ class Game {
         trail.rotation.x = Math.PI / 2; // Orient along path
         trail.position.z = 1.2; // Position behind the projectile
         projectile.add(trail);
+        
+        // Add smoke particles for rocket
+        if (this.currentWeapon === 'rocket') {
+            const smokeParticles = new THREE.Group();
+            projectile.add(smokeParticles);
+            
+            // Create and update smoke particles
+            const updateSmokeInterval = setInterval(() => {
+                if (!this.projectiles.includes(projectile)) {
+                    clearInterval(updateSmokeInterval);
+                    return;
+                }
+                
+                const smokeParticle = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.2 + Math.random() * 0.1, 8, 8),
+                    new THREE.MeshBasicMaterial({
+                        color: 0x888888,
+                        transparent: true, 
+                        opacity: 0.3 + Math.random() * 0.2
+                    })
+                );
+                
+                // Position behind rocket with slight randomness
+                smokeParticle.position.set(
+                    (Math.random() - 0.5) * 0.3,
+                    (Math.random() - 0.5) * 0.3,
+                    1.5 + Math.random() * 0.5
+                );
+                
+                // Add to scene directly so it stays in place
+                smokeParticle.position.add(projectile.position);
+                this.scene.add(smokeParticle);
+                
+                // Animate and remove smoke
+                const startTime = Date.now();
+                const smokeDuration = 500 + Math.random() * 200;
+                
+                const animateSmoke = () => {
+                    const elapsed = Date.now() - startTime;
+                    if (elapsed < smokeDuration) {
+                        const progress = elapsed / smokeDuration;
+                        smokeParticle.scale.set(1 + progress, 1 + progress, 1 + progress);
+                        smokeParticle.material.opacity = 0.4 * (1 - progress);
+                        requestAnimationFrame(animateSmoke);
+                    } else {
+                        this.scene.remove(smokeParticle);
+                    }
+                };
+                
+                animateSmoke();
+            }, 50); // Create smoke every 50ms
+        }
+        
+        // Make clones fire too
+        this.fireFromClones();
+    }
+    
+    // New method to make clones fire
+    fireFromClones() {
+        // Small delay for each clone to create a cooler effect
+        this.clones.forEach((clone, index) => {
+            setTimeout(() => {
+                if (!this.scene.getObjectById(clone.id)) return; // Skip if clone was removed
+                
+                const weaponConfig = this.weaponsConfig[this.currentWeapon];
+                
+                // Create projectile (same as player but smaller)
+                const projectileGeometry = this.currentWeapon === 'rocket' 
+                    ? new THREE.CylinderGeometry(0.12, 0.24, 0.6, 8)
+                    : new THREE.SphereGeometry(0.25, 12, 12);
+                    
+                const projectileMaterial = new THREE.MeshBasicMaterial({ 
+                    color: weaponConfig.projectileColor,
+                    emissive: weaponConfig.projectileColor,
+                    emissiveIntensity: 2.0
+                });
+                
+                const projectile = new THREE.Mesh(projectileGeometry, projectileMaterial);
+                
+                // Orient rocket projectiles
+                if (this.currentWeapon === 'rocket') {
+                    projectile.rotation.x = Math.PI / 2;
+                }
+                
+                // Start position at clone
+                projectile.position.copy(clone.position);
+                projectile.position.y = clone.position.y + 0.3; // Adjust for clone height
+                
+                // Store projectile properties - slightly weaker than player
+                projectile.userData = {
+                    velocity: new THREE.Vector3(0, 0, -weaponConfig.projectileSpeed),
+                    damage: weaponConfig.damage * 0.7, // 70% damage of player
+                    life: 800, // Same lifetime
+                    weaponType: this.currentWeapon
+                };
+                
+                this.scene.add(projectile);
+                this.projectiles.push(projectile);
+                
+                // Add glow and trail (smaller than player's)
+                const glowGeometry = new THREE.SphereGeometry(
+                    this.currentWeapon === 'rocket' ? 0.8 : 0.6,
+                    12, 12
+                );
+                const glowMaterial = new THREE.MeshBasicMaterial({ 
+                    color: weaponConfig.glowColor,
+                    transparent: true,
+                    opacity: 0.8
+                });
+                const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+                projectile.add(glow);
+                
+                // Add energy effect from clone to projectile
+                const energyBeam = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.05, 0.05, 0.5, 8),
+                    new THREE.MeshBasicMaterial({
+                        color: 0x00ffff,
+                        transparent: true,
+                        opacity: 0.6
+                    })
+                );
+                energyBeam.rotation.x = Math.PI / 2;
+                energyBeam.position.z = 0.25;
+                projectile.add(energyBeam);
+                
+                // Create muzzle flash effect at clone position
+                const muzzleFlash = new THREE.PointLight(weaponConfig.glowColor, 0.8, 3);
+                muzzleFlash.position.copy(clone.position);
+                muzzleFlash.position.y += 0.3;
+                this.scene.add(muzzleFlash);
+                
+                // Remove muzzle flash after a short time
+                setTimeout(() => {
+                    this.scene.remove(muzzleFlash);
+                }, 100);
+                
+            }, index * 50); // Stagger clone shots by 50ms each
+        });
     }
     
     updateProjectiles(deltaTime) {
@@ -836,6 +1080,8 @@ class Game {
                 continue;
             }
             
+            let projectileRemoved = false;
+            
             // Check collisions with enemies
             for (let j = this.enemies.length - 1; j >= 0; j--) {
                 const enemy = this.enemies[j];
@@ -845,35 +1091,154 @@ class Game {
                 const hitRadius = projectile.userData.weaponType === 'rocket' ? 2 : 1;
                 
                 if (distance < hitRadius) { // Hit radius
-                    // Create hit effect
-                    this.createHitEffect(projectile.position, projectile.userData.weaponType);
-                    
-                    // Damage enemy
-                    enemy.userData.health -= projectile.userData.damage;
-                    
-                    // Remove projectile (except laser which can pierce through)
-                    if (projectile.userData.weaponType !== 'laser') {
+                    // If it's a rocket, handle explosion differently
+                    if (projectile.userData.weaponType === 'rocket') {
+                        // Create explosion effect
+                        this.createHitEffect(projectile.position, 'rocket');
+                        
+                        // Create an explosion that damages all enemies within radius
+                        this.createRocketExplosion(projectile.position, projectile.userData.damage);
+                        
+                        // Remove rocket projectile
                         this.scene.remove(projectile);
                         this.projectiles.splice(i, 1);
-                    }
-                    
-                    // Remove enemy if dead
-                    if (enemy.userData.health <= 0) {
-                        this.scene.remove(enemy);
-                        this.enemies.splice(j, 1);
-                        
-                        // Increment kill counter
-                        this.enemyKills++;
-                        this.updateKillCounter();
-                    }
-                    
-                    // Break loop if projectile was removed
-                    if (projectile.userData.weaponType !== 'laser') {
+                        projectileRemoved = true;
                         break;
+                    } else {
+                        // Handle other projectiles normally
+                        this.createHitEffect(projectile.position, projectile.userData.weaponType);
+                        
+                        // Damage enemy
+                        enemy.userData.health -= projectile.userData.damage;
+                        
+                        // Remove projectile (except laser which can pierce through)
+                        if (projectile.userData.weaponType !== 'laser') {
+                            this.scene.remove(projectile);
+                            this.projectiles.splice(i, 1);
+                            projectileRemoved = true;
+                        }
+                        
+                        // Remove enemy if dead
+                        if (enemy.userData.health <= 0) {
+                            this.scene.remove(enemy);
+                            this.enemies.splice(j, 1);
+                            
+                            // Increment kill counter
+                            this.enemyKills++;
+                            this.updateKillCounter();
+                        }
+                        
+                        // Break loop if projectile was removed (except laser)
+                        if (projectileRemoved) {
+                            break;
+                        }
                     }
                 }
             }
+            
+            if (projectileRemoved) {
+                continue;
+            }
         }
+    }
+    
+    // New method to handle rocket explosions with area damage
+    createRocketExplosion(position, baseDamage) {
+        // Define explosion radius - larger than the hit radius
+        const explosionRadius = 6; // Increased from 5 to 6
+        
+        // Create a larger visual explosion
+        const explosionGeometry = new THREE.SphereGeometry(explosionRadius, 32, 32);
+        const explosionMaterial = new THREE.MeshBasicMaterial({
+            color: 0xff5500,
+            transparent: true,
+            opacity: 0.3
+        });
+        
+        const explosionSphere = new THREE.Mesh(explosionGeometry, explosionMaterial);
+        explosionSphere.position.copy(position);
+        this.scene.add(explosionSphere);
+        
+        // Add a secondary pulse effect
+        const pulseGeometry = new THREE.SphereGeometry(explosionRadius * 0.7, 32, 32);
+        const pulseMaterial = new THREE.MeshBasicMaterial({
+            color: 0xffaa00,
+            transparent: true,
+            opacity: 0.5
+        });
+        
+        const pulseSphere = new THREE.Mesh(pulseGeometry, pulseMaterial);
+        pulseSphere.position.copy(position);
+        this.scene.add(pulseSphere);
+        
+        // Animate and remove the visual indicator
+        const startTime = Date.now();
+        const duration = 500; // Increased from 300 to 500
+        
+        const animateExplosion = () => {
+            const elapsed = Date.now() - startTime;
+            const progress = elapsed / duration;
+            
+            if (progress < 1) {
+                // Main explosion sphere
+                explosionSphere.material.opacity = 0.3 * (1 - progress);
+                explosionSphere.scale.set(1 + progress * 0.5, 1 + progress * 0.5, 1 + progress * 0.5);
+                
+                // Pulse sphere
+                pulseSphere.material.opacity = 0.5 * (1 - progress);
+                pulseSphere.scale.set(0.7 + progress * 1.0, 0.7 + progress * 1.0, 0.7 + progress * 1.0);
+                
+                requestAnimationFrame(animateExplosion);
+            } else {
+                this.scene.remove(explosionSphere);
+                this.scene.remove(pulseSphere);
+            }
+        };
+        
+        animateExplosion();
+        
+        // Apply damage to all enemies within the explosion radius
+        for (let i = this.enemies.length - 1; i >= 0; i--) {
+            const enemy = this.enemies[i];
+            const distance = position.distanceTo(enemy.position);
+            
+            if (distance <= explosionRadius) {
+                // Calculate damage based on distance from center (more damage closer to center)
+                const damageMultiplier = 1 - (distance / explosionRadius) * 0.3; // At max range, still does 70% damage (changed from 50%)
+                const damage = baseDamage * damageMultiplier;
+                
+                // Apply damage to enemy
+                enemy.userData.health -= damage;
+                
+                // Apply force to enemies (push them away from explosion)
+                if (distance > 0.1) { // Avoid division by zero
+                    const pushDirection = new THREE.Vector3()
+                        .subVectors(enemy.position, position)
+                        .normalize();
+                    
+                    const pushForce = (1 - distance / explosionRadius) * 2; // More force closer to center
+                    enemy.position.add(pushDirection.multiplyScalar(pushForce));
+                }
+                
+                // Create small hit effect on each enemy caught in the blast
+                if (distance > 0.5) { // Don't create extra effects too close to explosion center
+                    this.createHitEffect(enemy.position, 'basic');
+                }
+                
+                // Remove enemy if dead
+                if (enemy.userData.health <= 0) {
+                    this.scene.remove(enemy);
+                    this.enemies.splice(i, 1);
+                    
+                    // Increment kill counter
+                    this.enemyKills++;
+                    this.updateKillCounter();
+                }
+            }
+        }
+        
+        // Create screen shake effect
+        this.createScreenShake(0.5, 600);
     }
     
     updateEnemies(deltaTime) {
@@ -893,7 +1258,8 @@ class Game {
             // Check if enemy reached the end
             if (enemy.position.z > 7) { // Changed to match new player position
                 // Reduce player health when enemy reaches the end
-                this.playerHealth = Math.max(0, this.playerHealth - 5); // Change to 5 damage and prevent negative values
+                const damage = enemy.userData.damage || 5; // Get damage from enemy or default to 5
+                this.playerHealth = Math.max(0, this.playerHealth - damage);
                 this.updateHealthBar();
                 
                 // Create damage effect
@@ -910,14 +1276,42 @@ class Game {
             }
         }
         
-        // Spawn new enemies based on time, with occasional wave spawns
+        // Check for wave progression
         const currentTime = Date.now();
+        if (currentTime - this.lastWaveChangeTime > this.waveChangeTime && this.currentWave < this.maxWave) {
+            this.currentWave++;
+            this.lastWaveChangeTime = currentTime;
+            this.updateWaveIndicator();
+            
+            // Announce new wave with a banner
+            this.announceNewWave();
+            
+            // Spawn boss on boss waves
+            if (this.bossWaves.includes(this.currentWave)) {
+                // Spawn boss after a short delay
+                setTimeout(() => {
+                    this.announceBoss();
+                    setTimeout(() => this.spawnEnemy(true), 2000);
+                }, 1000);
+            } else {
+                // Spawn a large wave for non-boss waves
+                const waveSize = Math.floor(3 + this.currentWave);
+                for (let i = 0; i < waveSize; i++) {
+                    setTimeout(() => this.spawnEnemy(), i * 400);
+                }
+            }
+            
+            // Scale difficulty based on wave
+            this.enemySpawnRate = Math.max(800 - (this.currentWave - 1) * 60, 400); // Faster spawns, min 400ms
+        }
+        
+        // Spawn new enemies based on time, with occasional wave spawns
         if (currentTime - this.lastSpawnTime > this.enemySpawnRate) {
             // Random chance for a wave of enemies (3-5)
             if (Math.random() < 0.3) {
                 const waveSize = Math.floor(Math.random() * 3) + 3;
                 for (let i = 0; i < waveSize; i++) {
-                    this.spawnEnemy();
+                    setTimeout(() => this.spawnEnemy(), i * 200);
                 }
                 console.log(`Spawned a wave of ${waveSize} enemies`);
             } else {
@@ -958,6 +1352,10 @@ class Game {
                     this.playerHealth = Math.min(100, this.playerHealth + 10);
                     this.updateHealthBar();
                     this.createHealthkitCollectEffect(upgrade.position);
+                } else if (upgrade.userData.upgradeType === 'clone') {
+                    // Spawn a player clone
+                    this.spawnPlayerClone();
+                    this.createUpgradeCollectEffect(upgrade.position);
                 } else {
                     // Weapon upgrade
                     this.currentWeapon = upgrade.userData.upgradeType;
@@ -1000,9 +1398,9 @@ class Game {
             case 'rocket':
                 explosionColor = 0xff3300;
                 glowColor = 0xff5500;
-                particleColors = [0xff3300, 0xffaa00];
-                size = 2.0;
-                duration = 300;
+                particleColors = [0xff3300, 0xffaa00, 0xffff00]; // Added yellow for more fire-like effect
+                size = 3.0; // Increased from 2.0 to 3.0
+                duration = 400; // Increased from 300 to 400
                 break;
             default:
                 explosionColor = 0xffaa00;
@@ -1035,11 +1433,14 @@ class Game {
         explosion.add(glow);
         
         // Add particles
-        const particleCount = weaponType === 'rocket' ? 20 : 10;
+        const particleCount = weaponType === 'rocket' ? 30 : 10; // Increased from 20 to 30 for rocket
         const particles = new THREE.Group();
         
         for (let i = 0; i < particleCount; i++) {
-            const particleGeom = new THREE.SphereGeometry(0.15, 8, 8);
+            const particleGeom = new THREE.SphereGeometry(
+                weaponType === 'rocket' ? 0.2 + Math.random() * 0.15 : 0.15, // Varied size for rocket
+                8, 8
+            );
             const particleMat = new THREE.MeshBasicMaterial({
                 color: particleColors[Math.floor(Math.random() * particleColors.length)],
                 transparent: true,
@@ -1049,14 +1450,14 @@ class Game {
             const particle = new THREE.Mesh(particleGeom, particleMat);
             // Random direction
             const angle = Math.random() * Math.PI * 2;
-            const radius = Math.random() * (weaponType === 'rocket' ? 1.5 : 0.8);
+            const radius = Math.random() * (weaponType === 'rocket' ? 2.5 : 0.8); // Increased from 1.5 to 2.5
             particle.position.set(
                 Math.cos(angle) * radius,
                 Math.sin(angle) * radius,
                 Math.sin(angle * 2) * radius
             );
             
-            const speed = weaponType === 'rocket' ? 0.08 : 0.05;
+            const speed = weaponType === 'rocket' ? 0.12 : 0.05; // Increased from 0.08 to 0.12
             particle.userData = {
                 velocity: particle.position.clone().normalize().multiplyScalar(speed)
             };
@@ -1072,7 +1473,7 @@ class Game {
         const animateExplosion = () => {
             const elapsed = Date.now() - startTime;
             const progress = elapsed / duration;
-            const scale = 1 + progress * (weaponType === 'rocket' ? 6 : 4);
+            const scale = 1 + progress * (weaponType === 'rocket' ? 8 : 4); // Increased from 6 to 8
             const opacity = 1 - progress;
             
             explosion.scale.set(scale, scale, scale);
@@ -1093,6 +1494,11 @@ class Game {
         };
         
         animateExplosion();
+        
+        // Add screen shake for rocket explosions
+        if (weaponType === 'rocket') {
+            this.createScreenShake(0.3, 400); // Add screen shake for rocket explosions
+        }
     }
     
     createUpgradeCollectEffect(position) {
@@ -1318,6 +1724,7 @@ class Game {
         this.updateProjectiles(deltaTime);
         this.updateEnemies(deltaTime);
         this.updateUpgrades(deltaTime);
+        this.updateClones(deltaTime); // Add clone updates
         
         // Update controls if available
         if (this.controls) {
@@ -1465,10 +1872,12 @@ class Game {
         gameOverDiv.style.zIndex = '1000';
         gameOverDiv.style.textAlign = 'center';
         
-        // Display game over text with kill count
+        // Display game over text with kill count and wave reached
         gameOverDiv.innerHTML = `
             <div>GAME OVER</div>
             <div style="font-size: 24px; margin-top: 10px;">Final Score: ${this.enemyKills} Kills</div>
+            <div style="font-size: 20px; margin-top: 5px; color: #aa55ff;">Wave Reached: ${this.currentWave}</div>
+            <div style="font-size: 18px; margin-top: 5px; color: #00aaff;">Clones Deployed: ${this.clones.length}</div>
         `;
         
         // Create restart button
@@ -1497,7 +1906,7 @@ class Game {
             document.body.removeChild(gameOverDiv);
             
             // Remove all existing UI elements
-            const uiElements = ['kill-counter', 'health-container', 'enemy-counter'];
+            const uiElements = ['kill-counter', 'health-container', 'enemy-counter', 'wave-indicator'];
             uiElements.forEach(id => {
                 const element = document.getElementById(id);
                 if (element) {
@@ -1520,7 +1929,7 @@ class Game {
         gameOverDiv.appendChild(restartButton);
         document.body.appendChild(gameOverDiv);
         
-        console.log("Game Over! Final score:", this.enemyKills);
+        console.log("Game Over! Final score:", this.enemyKills, "Wave reached:", this.currentWave);
     }
     
     // Method to remove weapon selection buttons and other external UI elements
@@ -1565,5 +1974,474 @@ class Game {
                 }
             }
         });
+    }
+    
+    // Create a wave indicator to show current difficulty
+    createWaveIndicator() {
+        const waveDiv = document.createElement('div');
+        waveDiv.id = 'wave-indicator';
+        waveDiv.style.position = 'absolute';
+        waveDiv.style.top = '50px'; // Below the kill counter
+        waveDiv.style.left = '50%';
+        waveDiv.style.transform = 'translateX(-50%)';
+        waveDiv.style.padding = '8px 15px';
+        waveDiv.style.backgroundColor = 'rgba(150, 0, 200, 0.7)';
+        waveDiv.style.color = 'white';
+        waveDiv.style.fontFamily = 'Arial, sans-serif';
+        waveDiv.style.fontSize = '18px';
+        waveDiv.style.fontWeight = 'bold';
+        waveDiv.style.borderRadius = '5px';
+        waveDiv.style.zIndex = '100';
+        waveDiv.style.transition = 'all 0.3s ease';
+        document.body.appendChild(waveDiv);
+        
+        this.updateWaveIndicator();
+    }
+    
+    updateWaveIndicator() {
+        const waveDiv = document.getElementById('wave-indicator');
+        if (waveDiv) {
+            waveDiv.textContent = `Wave: ${this.currentWave}`;
+            
+            // Animate the wave indicator on update
+            waveDiv.style.transform = 'translateX(-50%) scale(1.3)';
+            waveDiv.style.backgroundColor = 'rgba(200, 50, 250, 0.9)';
+            
+            // Reset after animation
+            setTimeout(() => {
+                waveDiv.style.transform = 'translateX(-50%) scale(1)';
+                waveDiv.style.backgroundColor = 'rgba(150, 0, 200, 0.7)';
+            }, 300);
+        }
+    }
+    
+    // Create a banner to announce a new wave
+    announceNewWave() {
+        const bannerDiv = document.createElement('div');
+        bannerDiv.style.position = 'absolute';
+        bannerDiv.style.top = '40%';
+        bannerDiv.style.left = '50%';
+        bannerDiv.style.transform = 'translate(-50%, -50%) scale(0)';
+        bannerDiv.style.padding = '20px 40px';
+        bannerDiv.style.backgroundColor = 'rgba(100, 0, 150, 0.8)';
+        bannerDiv.style.color = 'white';
+        bannerDiv.style.fontFamily = 'Arial, sans-serif';
+        bannerDiv.style.fontSize = '32px';
+        bannerDiv.style.fontWeight = 'bold';
+        bannerDiv.style.borderRadius = '10px';
+        bannerDiv.style.zIndex = '200';
+        bannerDiv.style.textAlign = 'center';
+        bannerDiv.style.transition = 'all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+        bannerDiv.style.boxShadow = '0 0 20px rgba(200, 100, 250, 0.5)';
+        bannerDiv.textContent = `WAVE ${this.currentWave}`;
+        
+        document.body.appendChild(bannerDiv);
+        
+        // Animate in
+        setTimeout(() => {
+            bannerDiv.style.transform = 'translate(-50%, -50%) scale(1)';
+        }, 10);
+        
+        // Animate out
+        setTimeout(() => {
+            bannerDiv.style.transform = 'translate(-50%, -50%) scale(0)';
+            setTimeout(() => {
+                document.body.removeChild(bannerDiv);
+            }, 500);
+        }, 2000);
+    }
+    
+    // Create a banner to announce a boss
+    announceBoss() {
+        const bannerDiv = document.createElement('div');
+        bannerDiv.style.position = 'absolute';
+        bannerDiv.style.top = '40%';
+        bannerDiv.style.left = '50%';
+        bannerDiv.style.transform = 'translate(-50%, -50%) scale(0)';
+        bannerDiv.style.padding = '30px 50px';
+        bannerDiv.style.backgroundColor = 'rgba(200, 0, 0, 0.8)';
+        bannerDiv.style.color = 'white';
+        bannerDiv.style.fontFamily = 'Arial, sans-serif';
+        bannerDiv.style.fontSize = '40px';
+        bannerDiv.style.fontWeight = 'bold';
+        bannerDiv.style.borderRadius = '10px';
+        bannerDiv.style.zIndex = '200';
+        bannerDiv.style.textAlign = 'center';
+        bannerDiv.style.transition = 'all 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+        bannerDiv.style.boxShadow = '0 0 30px rgba(255, 0, 0, 0.7)';
+        bannerDiv.innerHTML = `⚠ BOSS INCOMING ⚠<br><span style="font-size: 24px; opacity: 0.9;">Prepare yourself!</span>`;
+        
+        document.body.appendChild(bannerDiv);
+        
+        // Add warning sound effect here if audio is implemented
+        
+        // Animate in with pulsing
+        setTimeout(() => {
+            bannerDiv.style.transform = 'translate(-50%, -50%) scale(1)';
+            
+            // Add pulsing animation
+            let scale = 1;
+            const pulseInterval = setInterval(() => {
+                scale = scale === 1 ? 1.05 : 1;
+                bannerDiv.style.transform = `translate(-50%, -50%) scale(${scale})`;
+            }, 300);
+            
+            // Clear interval after banner removal
+            setTimeout(() => {
+                clearInterval(pulseInterval);
+            }, 3000);
+        }, 10);
+        
+        // Animate out
+        setTimeout(() => {
+            bannerDiv.style.transform = 'translate(-50%, -50%) scale(0)';
+            setTimeout(() => {
+                document.body.removeChild(bannerDiv);
+            }, 600);
+        }, 3000);
+    }
+    
+    // New method to create screen shake effect for explosions
+    createScreenShake(intensity, duration) {
+        const camera = this.camera;
+        const originalPosition = camera.position.clone();
+        const startTime = Date.now();
+        
+        const shakeCamera = () => {
+            const elapsed = Date.now() - startTime;
+            const progress = elapsed / duration;
+            
+            if (progress < 1) {
+                // Calculate decreasing intensity as effect progresses
+                const currentIntensity = intensity * (1 - progress);
+                
+                // Apply random offset to camera
+                camera.position.set(
+                    originalPosition.x + (Math.random() - 0.5) * currentIntensity,
+                    originalPosition.y + (Math.random() - 0.5) * currentIntensity,
+                    originalPosition.z + (Math.random() - 0.5) * currentIntensity
+                );
+                
+                requestAnimationFrame(shakeCamera);
+            } else {
+                // Reset camera position
+                camera.position.copy(originalPosition);
+            }
+        };
+        
+        shakeCamera();
+    }
+    
+    // New method for creating clone model
+    createCloneModel() {
+        const cloneGroup = new THREE.Group();
+        
+        // Base (holographic platform)
+        const baseGeometry = new THREE.CylinderGeometry(0.5, 0.6, 0.1, 12);
+        const baseMaterial = new THREE.MeshStandardMaterial({
+            color: 0x00ffff,
+            transparent: true,
+            opacity: 0.7,
+            emissive: 0x00aaff,
+            emissiveIntensity: 0.8
+        });
+        const base = new THREE.Mesh(baseGeometry, baseMaterial);
+        cloneGroup.add(base);
+        
+        // Clone icon (mini player figure)
+        const iconGeometry = new THREE.SphereGeometry(0.3, 8, 8);
+        const iconMaterial = new THREE.MeshStandardMaterial({
+            color: 0x22aaff,
+            emissive: 0x0066cc,
+            emissiveIntensity: 0.7
+        });
+        const icon = new THREE.Mesh(iconGeometry, iconMaterial);
+        icon.position.y = 0.3;
+        cloneGroup.add(icon);
+        
+        // Orbiting particle effect
+        for (let i = 0; i < 3; i++) {
+            const particleGeometry = new THREE.SphereGeometry(0.06, 8, 8);
+            const particleMaterial = new THREE.MeshBasicMaterial({
+                color: 0x00ffff,
+                transparent: true,
+                opacity: 0.9
+            });
+            const particle = new THREE.Mesh(particleGeometry, particleMaterial);
+            
+            // Position in orbit
+            const angle = (i / 3) * Math.PI * 2;
+            particle.position.set(
+                Math.cos(angle) * 0.5,
+                0.3,
+                Math.sin(angle) * 0.5
+            );
+            
+            // Store animation data
+            particle.userData = {
+                orbit: {
+                    angle: angle,
+                    radius: 0.5,
+                    speed: 3 + Math.random()
+                }
+            };
+            
+            cloneGroup.add(particle);
+        }
+        
+        // Add glow
+        const glowGeometry = new THREE.SphereGeometry(0.6, 16, 16);
+        const glowMaterial = new THREE.MeshBasicMaterial({
+            color: 0x00ddff,
+            transparent: true,
+            opacity: 0.4
+        });
+        const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+        glow.position.y = 0.2;
+        cloneGroup.add(glow);
+        
+        return cloneGroup;
+    }
+    
+    // New method to spawn a player clone
+    spawnPlayerClone() {
+        if (this.clones.length >= this.maxClones) return; // Limit number of clones
+        
+        // Create a smaller, translucent version of the player
+        const cloneGroup = new THREE.Group();
+        
+        // Body
+        const bodyGeometry = new THREE.CapsuleGeometry(0.4, 0.8, 4, 8);
+        const bodyMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0x3498db,
+            roughness: 0.7,
+            metalness: 0.3,
+            emissive: 0x1a4c72,
+            emissiveIntensity: 0.6,
+            transparent: true,
+            opacity: 0.8
+        });
+        
+        const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+        body.position.y = 0.5;
+        body.castShadow = true;
+        cloneGroup.add(body);
+        
+        // Head (helmet)
+        const helmetGeometry = new THREE.SphereGeometry(0.3, 16, 16);
+        const helmetMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0x0077ff,
+            emissive: 0x003366,
+            emissiveIntensity: 0.8,
+            transparent: true,
+            opacity: 0.8
+        });
+        const helmet = new THREE.Mesh(helmetGeometry, helmetMaterial);
+        helmet.position.set(0, 1.1, 0);
+        helmet.castShadow = true;
+        cloneGroup.add(helmet);
+        
+        // Arms
+        const armGeometry = new THREE.CapsuleGeometry(0.15, 0.5, 4, 8);
+        const armMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0x3498db,
+            emissive: 0x1a4c72,
+            emissiveIntensity: 0.6,
+            transparent: true,
+            opacity: 0.8
+        });
+        
+        const leftArm = new THREE.Mesh(armGeometry, armMaterial);
+        leftArm.position.set(-0.4, 0.5, 0);
+        leftArm.rotation.z = -Math.PI / 4;
+        leftArm.castShadow = true;
+        cloneGroup.add(leftArm);
+        
+        const rightArm = new THREE.Mesh(armGeometry, armMaterial);
+        rightArm.position.set(0.4, 0.5, 0);
+        rightArm.rotation.z = Math.PI / 4;
+        rightArm.castShadow = true;
+        cloneGroup.add(rightArm);
+        
+        // Add blue circle under clone
+        const circleGeometry = new THREE.CircleGeometry(0.8, 32);
+        const circleMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0x00aaff,
+            transparent: true,
+            opacity: 0.7
+        });
+        const circle = new THREE.Mesh(circleGeometry, circleMaterial);
+        circle.rotation.x = -Math.PI / 2;
+        circle.position.y = -0.5;
+        cloneGroup.add(circle);
+        
+        // Add energy effect connecting to main player
+        const connectionGeometry = new THREE.CylinderGeometry(0.05, 0.05, 1, 8);
+        const connectionMaterial = new THREE.MeshBasicMaterial({
+            color: 0x00ffff,
+            transparent: true,
+            opacity: 0.4
+        });
+        const connection = new THREE.Mesh(connectionGeometry, connectionMaterial);
+        connection.rotation.x = Math.PI / 2;
+        connection.position.y = 0;
+        cloneGroup.add(connection);
+        
+        // Determine position - alternate between left and right sides
+        const side = this.clones.length % 2 === 0 ? 1 : -1;
+        const offset = 1.5 + Math.floor(this.clones.length / 2) * 1.0;
+        
+        // Set clone position relative to player
+        cloneGroup.position.copy(this.player.position);
+        cloneGroup.position.x += side * offset;
+        cloneGroup.position.y = this.player.position.y - 0.2; // Slightly lower
+        
+        // Scale down the clone
+        cloneGroup.scale.set(0.8, 0.8, 0.8);
+        
+        // Store reference to the clone connection for updates
+        cloneGroup.userData = {
+            connectionBeam: connection,
+            type: 'clone',
+            side: side,
+            offset: offset
+        };
+        
+        this.scene.add(cloneGroup);
+        this.clones.push(cloneGroup);
+        
+        // Create spawn effect
+        this.createCloneSpawnEffect(cloneGroup.position);
+        
+        console.log(`Spawned player clone at position:`, cloneGroup.position);
+        
+        // Add counter display if this is the first clone
+        if (this.clones.length === 1) {
+            this.createCloneCounter();
+        } else {
+            this.updateCloneCounter();
+        }
+    }
+    
+    // New method to create spawn effect for clones
+    createCloneSpawnEffect(position) {
+        // Create spawn effect (blue/cyan energy rings)
+        const ringsCount = 5;
+        const rings = new THREE.Group();
+        
+        for (let i = 0; i < ringsCount; i++) {
+            const ringGeometry = new THREE.RingGeometry(0.5, 0.6, 32);
+            const ringMaterial = new THREE.MeshBasicMaterial({
+                color: 0x00ffff,
+                transparent: true,
+                opacity: 0.8,
+                side: THREE.DoubleSide
+            });
+            
+            const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+            ring.position.copy(position);
+            ring.rotation.x = Math.PI / 2;
+            ring.scale.set(0.1, 0.1, 0.1);
+            ring.userData = {
+                delay: i * 80,
+                startTime: Date.now()
+            };
+            
+            rings.add(ring);
+        }
+        
+        this.scene.add(rings);
+        
+        // Animate rings
+        const duration = 600;
+        
+        const animateRings = () => {
+            let allComplete = true;
+            
+            rings.children.forEach(ring => {
+                const elapsed = Date.now() - ring.userData.startTime - ring.userData.delay;
+                
+                if (elapsed > 0 && elapsed < duration) {
+                    allComplete = false;
+                    const progress = elapsed / duration;
+                    const scale = progress * 3;
+                    const opacity = 1 - progress;
+                    
+                    ring.scale.set(scale, scale, scale);
+                    ring.material.opacity = opacity;
+                }
+                else if (elapsed <= 0) {
+                    allComplete = false;
+                }
+            });
+            
+            if (!allComplete) {
+                requestAnimationFrame(animateRings);
+            } else {
+                this.scene.remove(rings);
+            }
+        };
+        
+        animateRings();
+    }
+    
+    // New method to create a clone counter
+    createCloneCounter() {
+        const counterDiv = document.createElement('div');
+        counterDiv.id = 'clone-counter';
+        counterDiv.style.position = 'absolute';
+        counterDiv.style.top = '50px';
+        counterDiv.style.right = '10px';
+        counterDiv.style.padding = '8px 15px';
+        counterDiv.style.backgroundColor = 'rgba(0, 150, 255, 0.7)';
+        counterDiv.style.color = 'white';
+        counterDiv.style.fontFamily = 'Arial, sans-serif';
+        counterDiv.style.fontSize = '16px';
+        counterDiv.style.fontWeight = 'bold';
+        counterDiv.style.borderRadius = '5px';
+        counterDiv.style.zIndex = '100';
+        document.body.appendChild(counterDiv);
+        
+        this.updateCloneCounter();
+    }
+    
+    // New method to update the clone counter
+    updateCloneCounter() {
+        const counterDiv = document.getElementById('clone-counter');
+        if (counterDiv) {
+            counterDiv.textContent = `Clones: ${this.clones.length}/${this.maxClones}`;
+        }
+    }
+    
+    // Update method to handle clones
+    updateClones(deltaTime) {
+        // Update each clone
+        for (let i = this.clones.length - 1; i >= 0; i--) {
+            const clone = this.clones[i];
+            
+            // Update clone position relative to player
+            clone.position.copy(this.player.position);
+            clone.position.x += clone.userData.side * clone.userData.offset;
+            clone.position.y = this.player.position.y - 0.2; // Slightly lower
+            
+            // Update connection beam
+            if (clone.userData.connectionBeam) {
+                // Calculate distance to player
+                const distance = Math.abs(clone.userData.side * clone.userData.offset);
+                
+                // Update beam size and position
+                clone.userData.connectionBeam.scale.z = distance;
+                clone.userData.connectionBeam.position.x = -clone.userData.side * distance/2;
+                
+                // Pulse effect
+                const pulseIntensity = (Math.sin(this.clock.getElapsedTime() * 5) + 1) / 2;
+                clone.userData.connectionBeam.material.opacity = 0.2 + pulseIntensity * 0.3;
+            }
+        }
+        
+        // Update clone counter if needed
+        if (this.clones.length > 0) {
+            this.updateCloneCounter();
+        }
     }
 } 
