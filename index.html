@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Last War Survival Game</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000;
+            font-family: Arial, sans-serif;
+        }
+        #ui-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+        #power-ups {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 20px;
+        }
+        .power-up {
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            border: 2px solid #3498db;
+            pointer-events: auto;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .power-up:hover {
+            background-color: rgba(52, 152, 219, 0.7);
+            transform: scale(1.1);
+        }
+        .power-up.active {
+            background-color: #3498db;
+            box-shadow: 0 0 15px rgba(52, 152, 219, 0.9);
+        }
+        #game-title {
+            position: absolute; 
+            top: 20px;
+            right: 20px;
+            color: white;
+            font-size: 24px;
+            font-weight: bold;
+            text-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+        }
+        #level-indicator {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            font-size: 40px;
+            font-weight: bold;
+            color: white;
+            background: rgba(0, 0, 0, 0.5);
+            width: 60px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 10px;
+        }
+        #controls-info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            font-size: 16px;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 10px 15px;
+            border-radius: 5px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .key {
+            display: inline-block;
+            background-color: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            border-radius: 3px;
+            padding: 2px 8px;
+            margin: 0 3px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div id="ui-container">
+        <div id="power-ups">
+            <div class="power-up active" id="rifle">Rifle</div>
+            <div class="power-up" id="machine-gun">Machine Gun</div>
+            <div class="power-up" id="bow">Bow</div>
+        </div>
+        <div id="game-title">LAST WAR SURVIVAL</div>
+        <div id="level-indicator">1</div>
+        <div id="controls-info">
+            Move: <span class="key">A</span> <span class="key">D</span> | Fire: <span class="key">Click</span>
+        </div>
+    </div>
+    
+    <!-- Three.js library -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/controls/OrbitControls.js"></script>
+    
+    <!-- Game scripts -->
+    <script src="src/js/utils.js"></script>
+    <script src="src/js/models.js"></script>
+    <script src="src/js/weapons.js"></script>
+    <script src="src/js/units.js"></script>
+    <script src="src/js/game.js"></script>
+    <script src="src/js/main.js"></script>
+</body>
+</html> 
