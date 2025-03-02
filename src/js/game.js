@@ -41,7 +41,7 @@ class Game {
             rocket: 0
         };
         this.baseWeaponDamage = {
-            basic: 1, // Store original damage values
+            basic: 1.3, // Store original damage values
             laser: 0.7,
             rocket: 5
         };
@@ -86,7 +86,7 @@ class Game {
                 model: null,
                 projectileColor: 0xffff00,
                 projectileSpeed: 40,
-                damage: 1,
+                damage: 1.3,
                 fireRate: 200,
                 trailColor: 0xffaa00,
                 glowColor: 0xffff88
@@ -95,7 +95,7 @@ class Game {
                 model: null,
                 projectileColor: 0x00ffff,
                 projectileSpeed: 60,
-                damage: 0.5,
+                damage: 0.7,
                 fireRate: 133,
                 trailColor: 0x00ffaa,
                 glowColor: 0x88ffff
@@ -104,7 +104,7 @@ class Game {
                 model: null,
                 projectileColor: 0xff0000,
                 projectileSpeed: 30,
-                damage: 1,
+                damage: 4,
                 fireRate: 1000,
                 trailColor: 0xff4400,
                 glowColor: 0xff8888
@@ -585,7 +585,7 @@ class Game {
         const enemyGroup = new THREE.Group();
         
         // Difficulty scaling factors
-        const healthScaling = Math.min(1 + (this.currentWave - 1) * 0.3, 1.5); // Up to 3x health
+        const healthScaling = Math.min(1 + (this.currentWave - 1) * 0.3, 1.3); // Up to 3x health
         const speedScaling = Math.min(1 + (this.currentWave - 1) * 0.1, 1.1); // Up to 1.5x speed
         
         // Enemy color - bosses are red, regular soldiers are green/camo
@@ -765,7 +765,7 @@ class Game {
         // Store enemy properties with scaling based on wave
         enemyGroup.userData = {
             speed: (0.24 + Math.random() * 0.12) * speedScaling, // Scale speed with wave
-            health: isBoss ? (3 * healthScaling) : Math.ceil(1 * healthScaling), // Scale health with wave
+            health: isBoss ? (10 * healthScaling) : Math.ceil(1 * healthScaling), // Scale health with wave, 10x for boss
             type: 'enemy',
             isBoss: isBoss,
             damage: isBoss ? 15 : 5 // Bosses do more damage
@@ -1439,76 +1439,147 @@ class Game {
                 let projectileGeometry;
                 let projectile;
                 
-                // Enhanced projectile geometry based on weapon type - same as player but smaller
+                // Use identical projectile geometry as the player
                 if (this.currentWeapon === 'rocket') {
                     // Rocket - Detailed missile shape
                     const rocketGroup = new THREE.Group();
                     
                     // Rocket body
-                    const bodyGeo = new THREE.CylinderGeometry(0.12, 0.2, 0.6, 8);
+                    const bodyGeo = new THREE.CylinderGeometry(0.15, 0.25, 0.7, 8);
                     const bodyMat = new THREE.MeshBasicMaterial({ 
-                        color: clone.userData.color || 0xff3300,
-                        emissive: clone.userData.color || 0xff0000
+                        color: 0xff3300,
+                        emissive: 0xff0000
                     });
                     const body = new THREE.Mesh(bodyGeo, bodyMat);
                     rocketGroup.add(body);
                     
                     // Rocket nose
-                    const noseGeo = new THREE.ConeGeometry(0.12, 0.24, 8);
+                    const noseGeo = new THREE.ConeGeometry(0.15, 0.3, 8);
                     const noseMat = new THREE.MeshBasicMaterial({ 
                         color: 0xff6600
                     });
                     const nose = new THREE.Mesh(noseGeo, noseMat);
-                    nose.position.y = 0.4;
+                    nose.position.y = 0.5;
                     rocketGroup.add(nose);
                     
                     // Rocket fins
-                    const finGeo = new THREE.BoxGeometry(0.04, 0.16, 0.16);
+                    const finGeo = new THREE.BoxGeometry(0.05, 0.2, 0.2);
                     const finMat = new THREE.MeshBasicMaterial({ 
                         color: 0xffaa00
                     });
                     
-                    // Create 4 fins around the rocket
                     for (let i = 0; i < 4; i++) {
                         const fin = new THREE.Mesh(finGeo, finMat);
+                        const angle = (i / 4) * Math.PI * 2;
                         fin.position.set(
-                            Math.sin(i * Math.PI/2) * 0.2,
-                            -0.3,
-                            Math.cos(i * Math.PI/2) * 0.2
+                            Math.cos(angle) * 0.2,
+                            -0.35,
+                            Math.sin(angle) * 0.2
                         );
-                        fin.lookAt(new THREE.Vector3(
-                            fin.position.x * 2,
-                            fin.position.y,
-                            fin.position.z * 2
-                        ));
+                        fin.rotation.z = angle;
                         rocketGroup.add(fin);
                     }
                     
-                    // Use the whole group as the projectile
                     projectile = rocketGroup;
                     projectile.rotation.x = Math.PI / 2;
-                } else {
-                    // For laser and basic weapons, use a simpler geometry
-                    if (this.currentWeapon === 'laser') {
-                        projectileGeometry = new THREE.CylinderGeometry(0.1, 0.1, 1.0, 8);
-                    } else {
-                        projectileGeometry = new THREE.SphereGeometry(0.15, 8, 8);
-                    }
+                } else if (this.currentWeapon === 'laser') {
+                    // Laser - Energy bolt with core
+                    projectile = new THREE.Group();
                     
-                    // Use clone's color for projectile
-                    const projectileColor = clone.userData.color || weaponConfig.projectileColor;
-                    
-                    const projectileMaterial = new THREE.MeshBasicMaterial({ 
-                        color: projectileColor,
-                        emissive: projectileColor,
-                        emissiveIntensity: 2.0
+                    // Outer glow
+                    const outerGeo = new THREE.SphereGeometry(0.3, 12, 12);
+                    outerGeo.scale(1, 1, 2); // Elongate
+                    const outerMat = new THREE.MeshBasicMaterial({
+                        color: 0x00ffff,
+                        transparent: true,
+                        opacity: 0.6
                     });
+                    const outer = new THREE.Mesh(outerGeo, outerMat);
+                    projectile.add(outer);
                     
-                    projectile = new THREE.Mesh(projectileGeometry, projectileMaterial);
+                    // Inner core
+                    const coreGeo = new THREE.SphereGeometry(0.15, 8, 8);
+                    coreGeo.scale(1, 1, 2.5); // More elongated
+                    const coreMat = new THREE.MeshBasicMaterial({
+                        color: 0xffffff,
+                        emissive: 0x00ffff,
+                        emissiveIntensity: 2
+                    });
+                    const core = new THREE.Mesh(coreGeo, coreMat);
+                    projectile.add(core);
                     
-                    // Orient laser projectiles
-                    if (this.currentWeapon === 'laser') {
-                        projectile.rotation.x = Math.PI / 2;
+                    // Energy rings
+                    for (let i = 0; i < 3; i++) {
+                        const ringGeo = new THREE.TorusGeometry(0.2, 0.03, 8, 16);
+                        const ringMat = new THREE.MeshBasicMaterial({
+                            color: 0x00ffff,
+                            transparent: true,
+                            opacity: 0.8 - (i * 0.2)
+                        });
+                        const ring = new THREE.Mesh(ringGeo, ringMat);
+                        ring.position.z = -0.3 - (i * 0.2);
+                        ring.rotation.y = Math.PI / 2;
+                        projectile.add(ring);
+                    }
+                } else {
+                    // Basic - Enhanced energy ball
+                    projectile = new THREE.Group();
+                    
+                    // Core sphere
+                    const coreGeo = new THREE.SphereGeometry(0.2, 12, 12);
+                    const coreMat = new THREE.MeshBasicMaterial({
+                        color: 0xffffaa,
+                        emissive: 0xffff00,
+                        emissiveIntensity: 2
+                    });
+                    const core = new THREE.Mesh(coreGeo, coreMat);
+                    projectile.add(core);
+                    
+                    // Outer shell
+                    const shellGeo = new THREE.SphereGeometry(0.3, 12, 12);
+                    const shellMat = new THREE.MeshBasicMaterial({
+                        color: 0xffff00,
+                        transparent: true,
+                        opacity: 0.6
+                    });
+                    const shell = new THREE.Mesh(shellGeo, shellMat);
+                    projectile.add(shell);
+                    
+                    // Orbiting particles
+                    for (let i = 0; i < 8; i++) {
+                        const particleGeo = new THREE.SphereGeometry(0.06, 6, 6);
+                        const particleMat = new THREE.MeshBasicMaterial({
+                            color: 0xffdd00
+                        });
+                        const particle = new THREE.Mesh(particleGeo, particleMat);
+                        
+                        const angle = (i / 8) * Math.PI * 2;
+                        const radius = 0.3;
+                        particle.position.set(
+                            Math.cos(angle) * radius,
+                            Math.sin(angle) * radius,
+                            0
+                        );
+                        
+                        // Add animation data
+                        particle.userData = {
+                            orbitSpeed: 3 + Math.random(),
+                            orbitRadius: radius,
+                            orbitAngle: angle
+                        };
+                        
+                        // Set up animation
+                        const animateParticle = () => {
+                            if (projectile.parent) {
+                                particle.userData.orbitAngle += 0.05 * particle.userData.orbitSpeed;
+                                particle.position.x = Math.cos(particle.userData.orbitAngle) * particle.userData.orbitRadius;
+                                particle.position.y = Math.sin(particle.userData.orbitAngle) * particle.userData.orbitRadius;
+                                requestAnimationFrame(animateParticle);
+                            }
+                        };
+                        animateParticle();
+                        
+                        projectile.add(particle);
                     }
                 }
                 
@@ -1522,181 +1593,249 @@ class Game {
                     damage: weaponConfig.damage * cloneDamageMultiplier,
                     life: 800, // Lifetime
                     weaponType: this.currentWeapon,
-                    fromClone: true, // Mark as from clone for special effects
-                    cloneColor: clone.userData.color
+                    fromClone: true // Mark as from clone
                 };
                 
                 this.scene.add(projectile);
                 this.projectiles.push(projectile);
                 
-                // Add enhanced trail effect
-                let trailGroup = new THREE.Group();
-                projectile.add(trailGroup);
-                
-                if (this.currentWeapon === 'laser') {
-                    // Laser beam trail
-                    const trailGeo = new THREE.CylinderGeometry(0.08, 0.04, 3, 8);
-                    const trailMat = new THREE.MeshBasicMaterial({
-                        color: clone.userData.color || 0x00ffff,
-                        transparent: true,
-                        opacity: 0.7
-                    });
-                    const trail = new THREE.Mesh(trailGeo, trailMat);
-                    trail.position.z = 1.5;
-                    trail.rotation.x = Math.PI / 2;
-                    trailGroup.add(trail);
-                    
-                    // Emit energy particles
-                    const emitEnergyParticles = () => {
-                        if (!projectile || !this.scene.getObjectById(projectile.id)) return;
-                        
-                        for (let i = 0; i < 2; i++) {
-                            const particleGeo = new THREE.SphereGeometry(0.05, 4, 4);
-                            const particleMat = new THREE.MeshBasicMaterial({
-                                color: clone.userData.color || 0x00ffff,
-                                transparent: true,
-                                opacity: 0.8
-                            });
-                            
-                            const particle = new THREE.Mesh(particleGeo, particleMat);
-                            
-                            // Random position along trail
-                            particle.position.copy(projectile.position);
-                            particle.position.z += Math.random() * 2;
-                            
-                            // Add some random offset
-                            particle.position.x += (Math.random() - 0.5) * 0.2;
-                            particle.position.y += (Math.random() - 0.5) * 0.2;
-                            
-                            this.scene.add(particle);
-                            
-                            // Animate the particles
-                            const startScale = { value: 1 };
-                            const animateParticle = () => {
-                                if (startScale.value <= 0) {
-                                    this.scene.remove(particle);
-                                    return;
-                                }
-                                
-                                startScale.value -= 0.05;
-                                particle.scale.set(startScale.value, startScale.value, startScale.value);
-                                particle.material.opacity = startScale.value * 0.8;
-                                
-                                requestAnimationFrame(animateParticle);
-                            };
-                            
-                            animateParticle();
-                        }
-                        
-                        // Continue emitting while projectile exists
-                        setTimeout(emitEnergyParticles, 50);
-                    };
-                    
-                    emitEnergyParticles();
-                } else if (this.currentWeapon === 'rocket') {
-                    // Rocket exhaust effect
-                    const createSmokeParticle = () => {
-                        if (!projectile || !this.scene.getObjectById(projectile.id)) return;
-                        
-                        const smokeGeo = new THREE.SphereGeometry(0.1, 4, 4);
-                        const smokeMat = new THREE.MeshBasicMaterial({
-                            color: 0xaaaaaa,
-                            transparent: true,
-                            opacity: 0.6
-                        });
-                        
-                        const smoke = new THREE.Mesh(smokeGeo, smokeMat);
-                        smoke.position.copy(projectile.position);
-                        smoke.position.z += 0.5; // Behind the rocket
-                        
-                        // Add some randomness
-                        smoke.position.x += (Math.random() - 0.5) * 0.1;
-                        smoke.position.y += (Math.random() - 0.5) * 0.1;
-                        
-                        this.scene.add(smoke);
-                        
-                        // Animate smoke
-                        const animateSmoke = () => {
-                            if (!smoke || !this.scene.getObjectById(smoke.id)) return;
-                            
-                            smoke.scale.x += 0.03;
-                            smoke.scale.y += 0.03;
-                            smoke.scale.z += 0.03;
-                            smoke.material.opacity -= 0.02;
-                            
-                            if (smoke.material.opacity <= 0) {
-                                this.scene.remove(smoke);
-                                return;
-                            }
-                            
-                            requestAnimationFrame(animateSmoke);
-                        };
-                        
-                        animateSmoke();
-                        
-                        // Continue creating smoke while projectile exists
-                        setTimeout(createSmokeParticle, 50);
-                    };
-                    
-                    createSmokeParticle();
-                } else {
-                    // Basic projectile trail
-                    const emitSparks = () => {
-                        if (!projectile || !this.scene.getObjectById(projectile.id)) return;
-                        
-                        const sparkGeo = new THREE.BoxGeometry(0.05, 0.05, 0.05);
-                        const sparkMat = new THREE.MeshBasicMaterial({
-                            color: clone.userData.color || 0xff8844,
-                            transparent: true,
-                            opacity: 1
-                        });
-                        
-                        // Create 2-3 spark particles
-                        const numSparks = Math.floor(Math.random() * 2) + 2;
-                        
-                        for (let i = 0; i < numSparks; i++) {
-                            const spark = new THREE.Mesh(sparkGeo, sparkMat);
-                            spark.position.copy(projectile.position);
-                            
-                            // Random position around projectile
-                            spark.position.x += (Math.random() - 0.5) * 0.2;
-                            spark.position.y += (Math.random() - 0.5) * 0.2;
-                            spark.position.z += (Math.random() - 0.5) * 0.2;
-                            
-                            // Random rotation
-                            spark.rotation.x = Math.random() * Math.PI * 2;
-                            spark.rotation.y = Math.random() * Math.PI * 2;
-                            spark.rotation.z = Math.random() * Math.PI * 2;
-                            
-                            this.scene.add(spark);
-                            
-                            // Animate with fading
-                            const animateSpark = () => {
-                                if (!spark || !this.scene.getObjectById(spark.id)) return;
-                                
-                                spark.rotation.x += 0.1;
-                                spark.rotation.y += 0.1;
-                                spark.material.opacity -= 0.05;
-                                
-                                if (spark.material.opacity <= 0) {
-                                    this.scene.remove(spark);
-                                    return;
-                                }
-                                
-                                requestAnimationFrame(animateSpark);
-                            };
-                            
-                            animateSpark();
-                        }
-                        
-                        // Continue effect while projectile exists
-                        setTimeout(emitSparks, 50);
-                    };
-                    
-                    emitSparks();
-                }
+                // Add effects like in player's projectiles
+                this.addProjectileEffects(projectile);
             }, index * 150); // Staggered 150ms delay between clone shots
         });
+    }
+    
+    // Helper function to add projectile effects (same for player and clones)
+    addProjectileEffects(projectile) {
+        if (!projectile) return;
+        
+        const weaponType = projectile.userData.weaponType;
+        let trailGroup = new THREE.Group();
+        projectile.add(trailGroup);
+        
+        if (weaponType === 'laser') {
+            // Laser beam trail
+            const trailGeo = new THREE.CylinderGeometry(0.1, 0.05, 4, 8);
+            const trailMat = new THREE.MeshBasicMaterial({
+                color: 0x00ffff,
+                transparent: true,
+                opacity: 0.5
+            });
+            const trail = new THREE.Mesh(trailGeo, trailMat);
+            trail.rotation.x = Math.PI / 2;
+            trail.position.z = 2;
+            trailGroup.add(trail);
+            
+            // Energy particles that fly off
+            const emitEnergyParticles = () => {
+                if (!this.projectiles.includes(projectile)) return;
+                
+                const particleGeo = new THREE.SphereGeometry(0.05, 4, 4);
+                const particleMat = new THREE.MeshBasicMaterial({
+                    color: 0x88ffff,
+                    transparent: true,
+                    opacity: 0.8
+                });
+                
+                for (let i = 0; i < 2; i++) {
+                    const particle = new THREE.Mesh(particleGeo, particleMat);
+                    
+                    // Random position near the trail
+                    const offset = 0.15;
+                    particle.position.set(
+                        (Math.random() - 0.5) * offset,
+                        (Math.random() - 0.5) * offset,
+                        projectile.position.z + 0.5 + Math.random()
+                    );
+                    
+                    particle.userData = {
+                        velocity: new THREE.Vector3(
+                            (Math.random() - 0.5) * 5,
+                            (Math.random() - 0.5) * 5,
+                            (Math.random() - 0.5) * 5
+                        ),
+                        life: 30
+                    };
+                    
+                    this.scene.add(particle);
+                    
+                    // Animate and fade out
+                    const animateParticle = () => {
+                        if (particle.userData.life <= 0) {
+                            this.scene.remove(particle);
+                            return;
+                        }
+                        
+                        particle.position.x += particle.userData.velocity.x * 0.01;
+                        particle.position.y += particle.userData.velocity.y * 0.01;
+                        particle.position.z += particle.userData.velocity.z * 0.01;
+                        
+                        particle.userData.life--;
+                        particle.material.opacity = particle.userData.life / 30;
+                        
+                        requestAnimationFrame(animateParticle);
+                    };
+                    
+                    animateParticle();
+                }
+                
+                // Continue emitting particles
+                if (this.projectiles.includes(projectile)) {
+                    setTimeout(() => emitEnergyParticles(), 50);
+                }
+            };
+            
+            emitEnergyParticles();
+        } else if (weaponType === 'rocket') {
+            // Rocket trail - smoke and fire
+            const createSmokeParticle = () => {
+                if (!this.projectiles.includes(projectile)) return;
+                
+                const smokeGeo = new THREE.SphereGeometry(0.2, 6, 6);
+                const smokeMat = new THREE.MeshBasicMaterial({
+                    color: 0x555555,
+                    transparent: true,
+                    opacity: 0.4
+                });
+                
+                const smoke = new THREE.Mesh(smokeGeo, smokeMat);
+                smoke.position.copy(projectile.position);
+                smoke.position.z += 0.5; // Behind rocket
+                
+                smoke.userData = {
+                    life: 30,
+                    expandRate: 0.03
+                };
+                
+                this.scene.add(smoke);
+                
+                // Animate smoke
+                const animateSmoke = () => {
+                    if (smoke.userData.life <= 0) {
+                        this.scene.remove(smoke);
+                        return;
+                    }
+                    
+                    smoke.scale.x += smoke.userData.expandRate;
+                    smoke.scale.y += smoke.userData.expandRate;
+                    smoke.scale.z += smoke.userData.expandRate;
+                    
+                    smoke.userData.life--;
+                    smoke.material.opacity = (smoke.userData.life / 30) * 0.4;
+                    
+                    requestAnimationFrame(animateSmoke);
+                };
+                
+                animateSmoke();
+                
+                // Continue creating smoke
+                if (this.projectiles.includes(projectile)) {
+                    setTimeout(() => createSmokeParticle(), 50);
+                }
+            };
+            
+            createSmokeParticle();
+            
+            // Add sparks
+            const emitSparks = () => {
+                if (!this.projectiles.includes(projectile)) return;
+                
+                const sparkGeo = new THREE.SphereGeometry(0.05, 4, 4);
+                const sparkMat = new THREE.MeshBasicMaterial({
+                    color: 0xffaa00
+                });
+                
+                for (let i = 0; i < 3; i++) {
+                    const spark = new THREE.Mesh(sparkGeo, sparkMat);
+                    spark.position.copy(projectile.position);
+                    spark.position.z += 0.5; // Behind rocket
+                    
+                    // Random direction
+                    const angle = Math.random() * Math.PI * 2;
+                    const speed = 0.1 + Math.random() * 0.1;
+                    
+                    spark.userData = {
+                        velocity: new THREE.Vector3(
+                            Math.cos(angle) * speed,
+                            Math.sin(angle) * speed,
+                            0.1 * (Math.random() - 0.5)
+                        ),
+                        life: 20
+                    };
+                    
+                    this.scene.add(spark);
+                    
+                    // Animate spark
+                    const animateSpark = () => {
+                        if (spark.userData.life <= 0) {
+                            this.scene.remove(spark);
+                            return;
+                        }
+                        
+                        spark.position.x += spark.userData.velocity.x;
+                        spark.position.y += spark.userData.velocity.y;
+                        spark.position.z += spark.userData.velocity.z;
+                        
+                        spark.userData.life--;
+                        
+                        requestAnimationFrame(animateSpark);
+                    };
+                    
+                    animateSpark();
+                }
+                
+                // Continue emitting sparks
+                if (this.projectiles.includes(projectile)) {
+                    setTimeout(() => emitSparks(), 50);
+                }
+            };
+            
+            emitSparks();
+        } else {
+            // Basic weapon - small energy sparks
+            const emitSparks = () => {
+                if (!this.projectiles.includes(projectile)) return;
+                
+                const sparkGeo = new THREE.BoxGeometry(0.08, 0.08, 0.08);
+                const sparkMat = new THREE.MeshBasicMaterial({
+                    color: 0xffff88
+                });
+                
+                // Create a few sparks
+                const numSparks = Math.floor(Math.random() * 2) + 1;
+                
+                for (let i = 0; i < numSparks; i++) {
+                    const spark = new THREE.Mesh(sparkGeo, sparkMat);
+                    spark.position.copy(projectile.position);
+                    
+                    // Random rotation
+                    spark.rotation.x = Math.random() * Math.PI * 2;
+                    spark.rotation.y = Math.random() * Math.PI * 2;
+                    spark.rotation.z = Math.random() * Math.PI * 2;
+                    
+                    this.scene.add(spark);
+                    
+                    // Simple animation
+                    const startTime = Date.now();
+                    const animateSpark = () => {
+                        const elapsed = Date.now() - startTime;
+                        if (elapsed < 200) {
+                            spark.rotation.x += 0.2;
+                            spark.rotation.y += 0.2;
+                            requestAnimationFrame(animateSpark);
+                        } else {
+                            this.scene.remove(spark);
+                        }
+                    };
+                    
+                    animateSpark();
+                    
+                    setTimeout(() => emitSparks(), 80);
+                }
+            };
+            
+            emitSparks();
+        }
     }
     
     updateProjectiles(deltaTime) {
