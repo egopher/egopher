@@ -187,7 +187,7 @@ class Game {
     
     createBridge() {
         // Create a bridge with walls
-        const bridgeWidth = 16; // Increased from 10 to 16 (60% larger)
+        const bridgeWidth = 19.2; // Increased from 16 to 19.2 (20% larger)
         const bridgeLength = 60;
         
         // Bridge base (floor)
@@ -719,7 +719,7 @@ class Game {
         enemyGroup.add(rightArm);
         
         // Randomize position across the bridge width
-        const xPos = (Math.random() - 0.5) * 13; // Increased from 8 to 13 for wider bridge
+        const xPos = (Math.random() - 0.5) * 15.6; // Increased from 13 to 15.6 for wider bridge
         enemyGroup.position.set(xPos, isBoss ? 2 : 1, -50); // Far end of the bridge
         
         // Scale boss size
@@ -2155,7 +2155,7 @@ class Game {
         // Upgrade lane is at x=-8 with width 4
         // Allow movement across the entire range
         const leftmostBoundary = -10; // Left edge of upgrade lane
-        const rightmostBoundary = 8;  // Right edge of main bridge (increased from 5)
+        const rightmostBoundary = 9.6;  // Right edge of main bridge (increased from 8)
         
         // Simple boundary check - clamp to min/max values
         if (this.player.position.x < leftmostBoundary) {
