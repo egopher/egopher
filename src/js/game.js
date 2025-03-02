@@ -15,17 +15,21 @@ class Game {
         
         // Game objects
         this.bridge = null;
+        this.upgradeLane = null;
         this.player = null;
         this.enemies = [];
         this.projectiles = [];
         this.trees = [];
+        this.upgrades = [];
         
         // Game settings
-        this.scores = { blue: 178, red: 157 };
-        this.selectedWeapon = 'rifle';
-        this.gameSpeed = 1;
-        this.enemySpawnRate = 2000; // ms
+        this.enemyKills = 0; // Track enemy kills
+        this.currentWeapon = 'basic'; // Default weapon
+        this.gameSpeed = 1.5; // Increased overall game speed
+        this.enemySpawnRate = 800; // Increased spawn rate (ms)
+        this.upgradeSpawnRate = 5000; // ms
         this.lastSpawnTime = 0;
+        this.lastUpgradeTime = 0;
         this.playerMovementEnabled = true;
         
         // Player movement
@@ -33,7 +37,38 @@ class Game {
             left: false,  // A key
             right: false  // D key
         };
-        this.playerSpeed = 10;
+        this.playerSpeed = 15; // Faster player movement
+        
+        // Weapons config
+        this.weaponsConfig = {
+            basic: {
+                model: null,
+                projectileColor: 0xffff00,
+                projectileSpeed: 40,
+                damage: 1,
+                fireRate: 300,
+                trailColor: 0xffaa00,
+                glowColor: 0xffff88
+            },
+            laser: {
+                model: null,
+                projectileColor: 0x00ffff,
+                projectileSpeed: 60,
+                damage: 0.7,
+                fireRate: 100,
+                trailColor: 0x00ffaa,
+                glowColor: 0x88ffff
+            },
+            rocket: {
+                model: null,
+                projectileColor: 0xff0000,
+                projectileSpeed: 30,
+                damage: 3,
+                fireRate: 800,
+                trailColor: 0xff4400,
+                glowColor: 0xff8888
+            }
+        };
         
         // Initialize the scene
         this.initScene();
@@ -43,10 +78,14 @@ class Game {
         this.lastFrame = Date.now();
         this.animate();
         
-        // Initial enemy spawn
-        this.spawnEnemy();
-        this.spawnEnemy();
-        this.spawnEnemy();
+        // Initial enemy spawn - more enemies at start
+        for (let i = 0; i < 5; i++) {
+            this.spawnEnemy();
+        }
+        
+        // Create UI elements
+        this.createKillCounter();
+        this.createWeaponDisplay();
         
         console.log("Game initialization complete");
     }
@@ -79,8 +118,9 @@ class Game {
         // Add lighting
         this.addLighting();
         
-        // Create bridge
+        // Create bridge and upgrade lane
         this.createBridge();
+        this.createUpgradeLane();
         
         // Create player
         this.createPlayer();
@@ -88,8 +128,8 @@ class Game {
         // Create snowy forest environment
         this.createEnvironment();
         
-        // Update scoreboard
-        this.updateScoreDisplay();
+        // Create weapon models
+        this.createWeaponModels();
         
         console.log("Game scene initialized");
     }
@@ -161,6 +201,144 @@ class Game {
         rightWall.castShadow = true;
         rightWall.receiveShadow = true;
         this.scene.add(rightWall);
+    }
+    
+    createUpgradeLane() {
+        // Create a smaller lane for upgrades next to the main bridge
+        const laneWidth = 4;
+        const laneLength = 60;
+        
+        // Lane base (floor)
+        const laneGeometry = new THREE.BoxGeometry(laneWidth, 0.5, laneLength);
+        const laneMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0xBBDDFF, // Light blue for contrast
+            roughness: 0.7,
+            metalness: 0.3
+        });
+        
+        this.upgradeLane = new THREE.Mesh(laneGeometry, laneMaterial);
+        this.upgradeLane.position.set(-8, -0.25, -20); // Positioned to the left of main bridge
+        this.upgradeLane.receiveShadow = true;
+        this.scene.add(this.upgradeLane);
+        
+        // Lane walls
+        const wallHeight = 1;
+        const wallGeometry = new THREE.BoxGeometry(0.5, wallHeight, laneLength);
+        const wallMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0x6699CC,
+            roughness: 0.8,
+            metalness: 0.3
+        });
+        
+        // Left wall
+        const leftWall = new THREE.Mesh(wallGeometry, wallMaterial);
+        leftWall.position.set(-8 - laneWidth/2, wallHeight/2, -20);
+        leftWall.castShadow = true;
+        leftWall.receiveShadow = true;
+        this.scene.add(leftWall);
+        
+        // Right wall
+        const rightWall = new THREE.Mesh(wallGeometry, wallMaterial);
+        rightWall.position.set(-8 + laneWidth/2, wallHeight/2, -20);
+        rightWall.castShadow = true;
+        rightWall.receiveShadow = true;
+        this.scene.add(rightWall);
+    }
+    
+    createWeaponModels() {
+        // Basic weapon model (yellow pistol)
+        const basicWeapon = new THREE.Group();
+        
+        const basicBarrel = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.08, 0.08, 0.6, 8),
+            new THREE.MeshStandardMaterial({ 
+                color: 0xffdd00,
+                emissive: 0xffaa00,
+                emissiveIntensity: 0.5
+            })
+        );
+        basicBarrel.rotation.x = Math.PI / 2;
+        basicBarrel.position.set(0, 0, -0.2);
+        basicWeapon.add(basicBarrel);
+        
+        const basicHandle = new THREE.Mesh(
+            new THREE.BoxGeometry(0.15, 0.3, 0.1),
+            new THREE.MeshStandardMaterial({ color: 0xdd9900 })
+        );
+        basicHandle.position.set(0, -0.2, 0);
+        basicWeapon.add(basicHandle);
+        
+        this.weaponsConfig.basic.model = basicWeapon;
+        
+        // Laser weapon model (blue futuristic gun)
+        const laserWeapon = new THREE.Group();
+        
+        const laserBarrel = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.1, 0.08, 0.8, 8),
+            new THREE.MeshStandardMaterial({ 
+                color: 0x00ddff,
+                emissive: 0x0099ff,
+                emissiveIntensity: 0.7
+            })
+        );
+        laserBarrel.rotation.x = Math.PI / 2;
+        laserBarrel.position.set(0, 0, -0.3);
+        laserWeapon.add(laserBarrel);
+        
+        const laserBody = new THREE.Mesh(
+            new THREE.BoxGeometry(0.25, 0.15, 0.4),
+            new THREE.MeshStandardMaterial({ 
+                color: 0x0088cc,
+                emissive: 0x0066aa,
+                emissiveIntensity: 0.3
+            })
+        );
+        laserBody.position.set(0, 0, 0.1);
+        laserWeapon.add(laserBody);
+        
+        const laserHandle = new THREE.Mesh(
+            new THREE.BoxGeometry(0.15, 0.3, 0.1),
+            new THREE.MeshStandardMaterial({ color: 0x006699 })
+        );
+        laserHandle.position.set(0, -0.2, 0.1);
+        laserWeapon.add(laserHandle);
+        
+        this.weaponsConfig.laser.model = laserWeapon;
+        
+        // Rocket launcher model (red heavy weapon)
+        const rocketWeapon = new THREE.Group();
+        
+        const rocketBarrel = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.2, 0.2, 1, 8),
+            new THREE.MeshStandardMaterial({ 
+                color: 0xcc0000,
+                emissive: 0x990000,
+                emissiveIntensity: 0.3
+            })
+        );
+        rocketBarrel.rotation.x = Math.PI / 2;
+        rocketBarrel.position.set(0, 0, -0.3);
+        rocketWeapon.add(rocketBarrel);
+        
+        const rocketSight = new THREE.Mesh(
+            new THREE.BoxGeometry(0.1, 0.1, 0.1),
+            new THREE.MeshStandardMaterial({ 
+                color: 0xff0000,
+                emissive: 0xff0000,
+                emissiveIntensity: 1
+            })
+        );
+        rocketSight.position.set(0, 0.15, 0);
+        rocketWeapon.add(rocketSight);
+        
+        const rocketHandle = new THREE.Mesh(
+            new THREE.BoxGeometry(0.15, 0.3, 0.2),
+            new THREE.MeshStandardMaterial({ color: 0x660000 })
+        );
+        rocketHandle.position.set(0, -0.25, 0.2);
+        rocketWeapon.add(rocketHandle);
+        
+        this.weaponsConfig.rocket.model = rocketWeapon;
     }
     
     createPlayer() {
@@ -328,7 +506,7 @@ class Game {
             roughness: 0.7,
             metalness: 0.3,
             emissive: 0x992d22,
-            emissiveIntensity: 0.2
+            emissiveIntensity: 0.5 // Increased glow
         });
         
         const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
@@ -341,7 +519,7 @@ class Game {
         const hatMaterial = new THREE.MeshStandardMaterial({ 
             color: 0xff0000,
             emissive: 0xaa0000,
-            emissiveIntensity: 0.3
+            emissiveIntensity: 0.6
         });
         const hat = new THREE.Mesh(hatGeometry, hatMaterial);
         hat.position.set(0, 1.2, 0);
@@ -350,7 +528,11 @@ class Game {
         
         // Arms
         const armGeometry = new THREE.CapsuleGeometry(0.2, 0.6, 4, 8);
-        const armMaterial = new THREE.MeshStandardMaterial({ color: 0xe74c3c });
+        const armMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0xe74c3c,
+            emissive: 0xaa0000,
+            emissiveIntensity: 0.3
+        });
         
         const leftArm = new THREE.Mesh(armGeometry, armMaterial);
         leftArm.position.set(-0.5, 0.5, 0);
@@ -368,9 +550,9 @@ class Game {
         const xPos = (Math.random() - 0.5) * 8; // Spread across bridge width
         enemyGroup.position.set(xPos, 1, -50); // Far end of the bridge
         
-        // Store enemy properties
+        // Store enemy properties - 3x faster
         enemyGroup.userData = {
-            speed: 0.05 + Math.random() * 0.03,
+            speed: 0.24 + Math.random() * 0.12, // 3x faster enemies
             health: 1,
             type: 'enemy'
         };
@@ -378,17 +560,160 @@ class Game {
         this.scene.add(enemyGroup);
         this.enemies.push(enemyGroup);
         
+        // Update enemy counter
+        this.updateEnemyCounter();
+        
         console.log("Enemy spawned at position:", enemyGroup.position);
     }
     
-    fireProjectile() {
-        const projectileGeometry = new THREE.SphereGeometry(0.3, 12, 12); // Slightly larger projectile
-        const projectileMaterial = new THREE.MeshBasicMaterial({ 
-            color: 0xffff00,
-            emissive: 0xffcc00,
-            emissiveIntensity: 1.5
+    spawnUpgrade() {
+        const upgradeTypes = ['laser', 'rocket', 'basic'];
+        const upgradeType = upgradeTypes[Math.floor(Math.random() * upgradeTypes.length)];
+        
+        // Create upgrade group
+        const upgradeGroup = new THREE.Group();
+        
+        // Create base platform
+        const baseGeometry = new THREE.BoxGeometry(1.5, 0.2, 1.5);
+        const baseMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0x44aaff,
+            emissive: 0x0066cc,
+            emissiveIntensity: 0.3
         });
+        
+        const base = new THREE.Mesh(baseGeometry, baseMaterial);
+        base.position.y = 0.1;
+        base.castShadow = true;
+        base.receiveShadow = true;
+        upgradeGroup.add(base);
+        
+        // Add floating effect with glow
+        const glowGeometry = new THREE.SphereGeometry(1, 16, 16);
+        const glowMaterial = new THREE.MeshBasicMaterial({
+            color: 0x66ccff,
+            transparent: true,
+            opacity: 0.4
+        });
+        const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+        glow.position.y = 0.5;
+        upgradeGroup.add(glow);
+        
+        // Add weapon model
+        const weaponModel = this.weaponsConfig[upgradeType].model.clone();
+        weaponModel.position.y = 0.7;
+        weaponModel.scale.set(1.5, 1.5, 1.5);
+        upgradeGroup.add(weaponModel);
+        
+        // Add floating animation
+        const animationStartY = 0.7;
+        weaponModel.userData.floatAnimation = {
+            startY: animationStartY,
+            phase: Math.random() * Math.PI * 2,
+            speed: 2 + Math.random()
+        };
+        
+        // Set position on upgrade lane
+        const xPos = -8; // Center of upgrade lane
+        upgradeGroup.position.set(xPos, 1, -50); // Far end of the lane
+        
+        // Store upgrade type
+        upgradeGroup.userData = {
+            type: 'upgrade',
+            weaponType: upgradeType,
+            speed: 0.15 + Math.random() * 0.05
+        };
+        
+        this.scene.add(upgradeGroup);
+        this.upgrades.push(upgradeGroup);
+        
+        console.log(`Spawned ${upgradeType} upgrade at position:`, upgradeGroup.position);
+    }
+    
+    createKillCounter() {
+        // Create kill counter display
+        const counterDiv = document.createElement('div');
+        counterDiv.id = 'kill-counter';
+        counterDiv.style.position = 'absolute';
+        counterDiv.style.top = '10px';
+        counterDiv.style.left = '10px';
+        counterDiv.style.padding = '10px';
+        counterDiv.style.backgroundColor = 'rgba(0, 100, 255, 0.7)';
+        counterDiv.style.color = 'white';
+        counterDiv.style.fontFamily = 'Arial, sans-serif';
+        counterDiv.style.fontSize = '24px';
+        counterDiv.style.fontWeight = 'bold';
+        counterDiv.style.borderRadius = '5px';
+        counterDiv.style.zIndex = '100';
+        document.body.appendChild(counterDiv);
+        
+        this.updateKillCounter();
+    }
+    
+    updateKillCounter() {
+        const counterDiv = document.getElementById('kill-counter');
+        if (counterDiv) {
+            counterDiv.textContent = `Kills: ${this.enemyKills}`;
+        }
+    }
+    
+    createWeaponDisplay() {
+        // Create weapon display
+        const weaponDiv = document.createElement('div');
+        weaponDiv.id = 'weapon-display';
+        weaponDiv.style.position = 'absolute';
+        weaponDiv.style.bottom = '10px';
+        weaponDiv.style.left = '10px';
+        weaponDiv.style.padding = '10px';
+        weaponDiv.style.backgroundColor = 'rgba(0, 0, 0, 0.6)';
+        weaponDiv.style.color = 'white';
+        weaponDiv.style.fontFamily = 'Arial, sans-serif';
+        weaponDiv.style.fontSize = '18px';
+        weaponDiv.style.fontWeight = 'bold';
+        weaponDiv.style.borderRadius = '5px';
+        weaponDiv.style.zIndex = '100';
+        document.body.appendChild(weaponDiv);
+        
+        this.updateWeaponDisplay();
+    }
+    
+    updateWeaponDisplay() {
+        const weaponDiv = document.getElementById('weapon-display');
+        if (weaponDiv) {
+            const weaponName = this.currentWeapon.charAt(0).toUpperCase() + this.currentWeapon.slice(1);
+            const weaponColor = this.getWeaponColor(this.currentWeapon);
+            weaponDiv.innerHTML = `Weapon: <span style="color:${weaponColor}">${weaponName}</span>`;
+        }
+    }
+    
+    getWeaponColor(weaponType) {
+        switch(weaponType) {
+            case 'basic': return '#ffdd00';
+            case 'laser': return '#00ddff';
+            case 'rocket': return '#ff3300';
+            default: return 'white';
+        }
+    }
+    
+    fireProjectile() {
+        const weaponConfig = this.weaponsConfig[this.currentWeapon];
+        
+        // Create projectile based on weapon type
+        const projectileGeometry = this.currentWeapon === 'rocket' 
+            ? new THREE.CylinderGeometry(0.15, 0.3, 0.8, 8)
+            : new THREE.SphereGeometry(0.3, 12, 12);
+            
+        const projectileMaterial = new THREE.MeshBasicMaterial({ 
+            color: weaponConfig.projectileColor,
+            emissive: weaponConfig.projectileColor,
+            emissiveIntensity: 2.0
+        });
+        
         const projectile = new THREE.Mesh(projectileGeometry, projectileMaterial);
+        
+        // Orient rocket projectiles
+        if (this.currentWeapon === 'rocket') {
+            projectile.rotation.x = Math.PI / 2;
+        }
         
         // Start position at player
         projectile.position.copy(this.player.position);
@@ -396,139 +721,49 @@ class Game {
         
         // Store projectile properties
         projectile.userData = {
-            velocity: new THREE.Vector3(0, 0, -25), // 10x faster projectiles
-            damage: 1,
-            life: 1000 // Less lifetime since it travels faster
+            velocity: new THREE.Vector3(0, 0, -weaponConfig.projectileSpeed),
+            damage: weaponConfig.damage,
+            life: 800, // Lifetime
+            weaponType: this.currentWeapon
         };
         
         this.scene.add(projectile);
         this.projectiles.push(projectile);
         
-        // Add a more intense glow effect
-        const glowGeometry = new THREE.SphereGeometry(0.6, 12, 12);
+        // Add glow effect appropriate for the weapon
+        const glowGeometry = new THREE.SphereGeometry(0.7, 12, 12);
         const glowMaterial = new THREE.MeshBasicMaterial({ 
-            color: 0xffff88,
+            color: weaponConfig.glowColor,
             transparent: true,
-            opacity: 0.8
+            opacity: 0.9
         });
         const glow = new THREE.Mesh(glowGeometry, glowMaterial);
         projectile.add(glow);
         
         // Add trail effect
-        const trailGeometry = new THREE.CylinderGeometry(0.1, 0.1, 1.5, 8);
+        let trailGeometry;
+        
+        if (this.currentWeapon === 'laser') {
+            // Thin, long laser beam
+            trailGeometry = new THREE.CylinderGeometry(0.05, 0.05, 3, 8);
+        } else if (this.currentWeapon === 'rocket') {
+            // Rocket exhaust
+            trailGeometry = new THREE.ConeGeometry(0.3, 2, 8);
+        } else {
+            // Default trail
+            trailGeometry = new THREE.CylinderGeometry(0.1, 0.2, 2.5, 8);
+        }
+        
         const trailMaterial = new THREE.MeshBasicMaterial({
-            color: 0xffaa00,
+            color: weaponConfig.trailColor,
             transparent: true,
-            opacity: 0.6
+            opacity: 0.7
         });
+        
         const trail = new THREE.Mesh(trailGeometry, trailMaterial);
         trail.rotation.x = Math.PI / 2; // Orient along path
-        trail.position.z = 0.8; // Position behind the projectile
+        trail.position.z = 1.2; // Position behind the projectile
         projectile.add(trail);
-    }
-    
-    setupEventListeners() {
-        // Handle window resize
-        window.addEventListener('resize', () => {
-            this.camera.aspect = window.innerWidth / window.innerHeight;
-            this.camera.updateProjectionMatrix();
-            this.renderer.setSize(window.innerWidth, window.innerHeight);
-        });
-        
-        // Keyboard controls for player movement (A and D keys)
-        document.addEventListener('keydown', (e) => {
-            if (e.key.toLowerCase() === 'a') {
-                this.keyStates.left = true;
-            } else if (e.key.toLowerCase() === 'd') {
-                this.keyStates.right = true;
-            }
-        });
-        
-        document.addEventListener('keyup', (e) => {
-            if (e.key.toLowerCase() === 'a') {
-                this.keyStates.left = false;
-            } else if (e.key.toLowerCase() === 'd') {
-                this.keyStates.right = false;
-            }
-        });
-        
-        // Mouse click to fire
-        document.addEventListener('click', () => {
-            this.fireProjectile();
-        });
-        
-        // Handle weapon selection
-        document.querySelectorAll('.power-up').forEach(powerUp => {
-            powerUp.addEventListener('click', (e) => {
-                const weaponId = e.target.id;
-                this.selectWeapon(weaponId);
-                
-                // Update UI
-                document.querySelectorAll('.power-up').forEach(el => {
-                    el.classList.remove('active');
-                });
-                e.target.classList.add('active');
-                
-                e.stopPropagation(); // Don't fire a projectile when selecting weapon
-            });
-        });
-    }
-    
-    selectWeapon(weaponId) {
-        this.selectedWeapon = weaponId;
-        console.log(`Selected weapon: ${weaponId}`);
-        
-        // Change projectile properties based on weapon
-        switch(weaponId) {
-            case 'rifle':
-                this.projectileConfig = {
-                    color: 0xffff00,
-                    speed: 25,
-                    rate: 300,
-                    damage: 1
-                };
-                break;
-            case 'machine-gun':
-                this.projectileConfig = {
-                    color: 0xff4400,
-                    speed: 30,
-                    rate: 100,
-                    damage: 0.5
-                };
-                break;
-            case 'bow':
-                this.projectileConfig = {
-                    color: 0x00ffff,
-                    speed: 20,
-                    rate: 600,
-                    damage: 2
-                };
-                break;
-        }
-    }
-    
-    updatePlayerPosition(deltaTime) {
-        if (!this.playerMovementEnabled || !this.player) return;
-        
-        // Bridge boundaries
-        const bridgeWidth = 8;
-        const boundaryX = bridgeWidth / 2 - 0.5; // Allow player to move almost to the edge
-        
-        // Apply movement based on key states
-        if (this.keyStates.left) {
-            this.player.position.x -= this.playerSpeed * deltaTime;
-        }
-        if (this.keyStates.right) {
-            this.player.position.x += this.playerSpeed * deltaTime;
-        }
-        
-        // Clamp position to bridge boundaries
-        if (this.player.position.x < -boundaryX) {
-            this.player.position.x = -boundaryX;
-        }
-        if (this.player.position.x > boundaryX) {
-            this.player.position.x = boundaryX;
-        }
     }
     
     updateProjectiles(deltaTime) {
@@ -560,28 +795,36 @@ class Game {
                 const enemy = this.enemies[j];
                 const distance = projectile.position.distanceTo(enemy.position);
                 
-                if (distance < 1) { // Hit radius
+                // Different hit radius based on weapon type
+                const hitRadius = projectile.userData.weaponType === 'rocket' ? 2 : 1;
+                
+                if (distance < hitRadius) { // Hit radius
                     // Create hit effect
-                    this.createHitEffect(projectile.position);
+                    this.createHitEffect(projectile.position, projectile.userData.weaponType);
                     
                     // Damage enemy
                     enemy.userData.health -= projectile.userData.damage;
                     
-                    // Remove projectile
-                    this.scene.remove(projectile);
-                    this.projectiles.splice(i, 1);
+                    // Remove projectile (except laser which can pierce through)
+                    if (projectile.userData.weaponType !== 'laser') {
+                        this.scene.remove(projectile);
+                        this.projectiles.splice(i, 1);
+                    }
                     
                     // Remove enemy if dead
                     if (enemy.userData.health <= 0) {
                         this.scene.remove(enemy);
                         this.enemies.splice(j, 1);
                         
-                        // Update score
-                        this.scores.blue += 1;
-                        this.updateScoreDisplay();
+                        // Increment kill counter
+                        this.enemyKills++;
+                        this.updateKillCounter();
                     }
                     
-                    break;
+                    // Break loop if projectile was removed
+                    if (projectile.userData.weaponType !== 'laser') {
+                        break;
+                    }
                 }
             }
         }
@@ -595,8 +838,8 @@ class Game {
         for (let i = this.enemies.length - 1; i >= 0; i--) {
             const enemy = this.enemies[i];
             
-            // Move enemy toward player - use a higher speed to make movement more noticeable
-            const moveAmount = enemy.userData.speed * deltaTime * this.gameSpeed * 10;
+            // Move enemy toward player - 3x faster than before
+            const moveAmount = enemy.userData.speed * deltaTime * this.gameSpeed * 12; // 3x faster
             enemy.position.z += moveAmount;
             
             console.log(`Enemy ${i} moved by ${moveAmount} to position:`, enemy.position);
@@ -605,57 +848,178 @@ class Game {
             if (enemy.position.z > 7) { // Changed to match new player position
                 this.scene.remove(enemy);
                 this.enemies.splice(i, 1);
-                
-                // Update score - enemy got through
-                this.scores.red += 1;
-                this.updateScoreDisplay();
-                console.log("Enemy reached end of bridge, removed");
             }
         }
         
-        // Spawn new enemies based on time
+        // Spawn new enemies based on time, with occasional wave spawns
         const currentTime = Date.now();
         if (currentTime - this.lastSpawnTime > this.enemySpawnRate) {
-            this.spawnEnemy();
+            // Random chance for a wave of enemies (3-5)
+            if (Math.random() < 0.3) {
+                const waveSize = Math.floor(Math.random() * 3) + 3;
+                for (let i = 0; i < waveSize; i++) {
+                    this.spawnEnemy();
+                }
+                console.log(`Spawned a wave of ${waveSize} enemies`);
+            } else {
+                this.spawnEnemy();
+            }
             this.lastSpawnTime = currentTime;
         }
     }
     
-    createHitEffect(position) {
-        // Create a more dramatic explosion effect
-        const explosionGeometry = new THREE.SphereGeometry(0.7, 12, 12);
+    updateUpgrades(deltaTime) {
+        for (let i = this.upgrades.length - 1; i >= 0; i--) {
+            const upgrade = this.upgrades[i];
+            
+            // Move upgrade forward
+            const moveAmount = upgrade.userData.speed * deltaTime * this.gameSpeed * 12;
+            upgrade.position.z += moveAmount;
+            
+            // Animate floating weapon
+            if (upgrade.children.length > 2) {
+                const weaponModel = upgrade.children[2];
+                const anim = weaponModel.userData.floatAnimation;
+                
+                if (anim) {
+                    const newY = anim.startY + Math.sin(anim.phase + this.clock.getElapsedTime() * anim.speed) * 0.2;
+                    weaponModel.position.y = newY;
+                    
+                    // Also rotate slowly
+                    weaponModel.rotation.y += deltaTime * 1.5;
+                }
+            }
+            
+            // Check if player collected the upgrade
+            const distance = upgrade.position.distanceTo(this.player.position);
+            if (distance < 3) {
+                // Apply upgrade
+                this.currentWeapon = upgrade.userData.weaponType;
+                this.updateWeaponDisplay();
+                
+                // Create effect
+                this.createUpgradeCollectEffect(upgrade.position);
+                
+                // Remove upgrade
+                this.scene.remove(upgrade);
+                this.upgrades.splice(i, 1);
+                continue;
+            }
+            
+            // Remove if past player
+            if (upgrade.position.z > 7) {
+                this.scene.remove(upgrade);
+                this.upgrades.splice(i, 1);
+            }
+        }
+        
+        // Spawn new upgrades
+        const currentTime = Date.now();
+        if (currentTime - this.lastUpgradeTime > this.upgradeSpawnRate) {
+            this.spawnUpgrade();
+            this.lastUpgradeTime = currentTime;
+        }
+    }
+    
+    createHitEffect(position, weaponType) {
+        // Different explosion effects based on weapon type
+        let explosionColor, glowColor, particleColors, size, duration;
+        
+        switch(weaponType) {
+            case 'laser':
+                explosionColor = 0x00ffff;
+                glowColor = 0x00aaff;
+                particleColors = [0x00ffff, 0x0088ff];
+                size = 0.7;
+                duration = 150;
+                break;
+            case 'rocket':
+                explosionColor = 0xff3300;
+                glowColor = 0xff5500;
+                particleColors = [0xff3300, 0xffaa00];
+                size = 2.0;
+                duration = 300;
+                break;
+            default:
+                explosionColor = 0xffaa00;
+                glowColor = 0xff5500;
+                particleColors = [0xffff00, 0xff5500];
+                size = 0.8;
+                duration = 180;
+        }
+        
+        // Create explosion effect
+        const explosionGeometry = new THREE.SphereGeometry(size, 16, 16);
         const explosionMaterial = new THREE.MeshBasicMaterial({ 
-            color: 0xffaa00,
+            color: explosionColor,
             transparent: true,
-            opacity: 0.9
+            opacity: 1.0
         });
         
         const explosion = new THREE.Mesh(explosionGeometry, explosionMaterial);
         explosion.position.copy(position);
         this.scene.add(explosion);
         
-        // Add a secondary glow for more impact
-        const glowGeometry = new THREE.SphereGeometry(1.2, 12, 12);
+        // Add secondary glow
+        const glowGeometry = new THREE.SphereGeometry(size * 1.8, 16, 16);
         const glowMaterial = new THREE.MeshBasicMaterial({
-            color: 0xff5500,
+            color: glowColor,
             transparent: true,
-            opacity: 0.5
+            opacity: 0.7
         });
         const glow = new THREE.Mesh(glowGeometry, glowMaterial);
         explosion.add(glow);
         
-        // Animate and remove
+        // Add particles
+        const particleCount = weaponType === 'rocket' ? 20 : 10;
+        const particles = new THREE.Group();
+        
+        for (let i = 0; i < particleCount; i++) {
+            const particleGeom = new THREE.SphereGeometry(0.15, 8, 8);
+            const particleMat = new THREE.MeshBasicMaterial({
+                color: particleColors[Math.floor(Math.random() * particleColors.length)],
+                transparent: true,
+                opacity: 0.8
+            });
+            
+            const particle = new THREE.Mesh(particleGeom, particleMat);
+            // Random direction
+            const angle = Math.random() * Math.PI * 2;
+            const radius = Math.random() * (weaponType === 'rocket' ? 1.5 : 0.8);
+            particle.position.set(
+                Math.cos(angle) * radius,
+                Math.sin(angle) * radius,
+                Math.sin(angle * 2) * radius
+            );
+            
+            const speed = weaponType === 'rocket' ? 0.08 : 0.05;
+            particle.userData = {
+                velocity: particle.position.clone().normalize().multiplyScalar(speed)
+            };
+            
+            particles.add(particle);
+        }
+        
+        explosion.add(particles);
+        
+        // Animate explosion
         const startTime = Date.now();
-        const duration = 200; // Faster animation for more intense feel
         
         const animateExplosion = () => {
             const elapsed = Date.now() - startTime;
-            const scale = 1 + (elapsed / duration) * 3;
-            const opacity = 1 - (elapsed / duration);
+            const progress = elapsed / duration;
+            const scale = 1 + progress * (weaponType === 'rocket' ? 6 : 4);
+            const opacity = 1 - progress;
             
             explosion.scale.set(scale, scale, scale);
             explosionMaterial.opacity = opacity;
-            glowMaterial.opacity = opacity * 0.5;
+            glowMaterial.opacity = opacity * 0.7;
+            
+            // Animate particles
+            particles.children.forEach(particle => {
+                particle.position.add(particle.userData.velocity);
+                particle.material.opacity = opacity;
+            });
             
             if (elapsed < duration) {
                 requestAnimationFrame(animateExplosion);
@@ -667,8 +1031,66 @@ class Game {
         animateExplosion();
     }
     
-    updateScoreDisplay() {
-        // Empty function - removed score display
+    createUpgradeCollectEffect(position) {
+        // Create collection effect
+        const radius = 2;
+        const ringsCount = 3;
+        const rings = new THREE.Group();
+        
+        for (let i = 0; i < ringsCount; i++) {
+            const ringGeometry = new THREE.RingGeometry(radius * 0.7, radius, 32);
+            const ringMaterial = new THREE.MeshBasicMaterial({
+                color: 0x66ccff,
+                transparent: true,
+                opacity: 0.7,
+                side: THREE.DoubleSide
+            });
+            
+            const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+            ring.position.copy(position);
+            ring.rotation.x = Math.PI / 2;
+            ring.scale.set(0.1, 0.1, 0.1);
+            ring.userData = {
+                delay: i * 150,
+                startTime: Date.now()
+            };
+            
+            rings.add(ring);
+        }
+        
+        this.scene.add(rings);
+        
+        // Animate rings
+        const duration = 800;
+        
+        const animateRings = () => {
+            let allComplete = true;
+            
+            rings.children.forEach(ring => {
+                const elapsed = Date.now() - ring.userData.startTime - ring.userData.delay;
+                
+                if (elapsed > 0 && elapsed < duration) {
+                    allComplete = false;
+                    const progress = elapsed / duration;
+                    const scale = progress * 2;
+                    const opacity = 1 - progress;
+                    
+                    ring.scale.set(scale, scale, scale);
+                    ring.material.opacity = opacity;
+                }
+                else if (elapsed <= 0) {
+                    allComplete = false;
+                }
+            });
+            
+            if (!allComplete) {
+                requestAnimationFrame(animateRings);
+            } else {
+                this.scene.remove(rings);
+            }
+        };
+        
+        animateRings();
     }
     
     animate() {
@@ -683,6 +1105,7 @@ class Game {
         this.updatePlayerPosition(deltaTime);
         this.updateProjectiles(deltaTime);
         this.updateEnemies(deltaTime);
+        this.updateUpgrades(deltaTime);
         
         // Update controls if available
         if (this.controls) {
@@ -691,5 +1114,80 @@ class Game {
         
         // Render the scene
         this.renderer.render(this.scene, this.camera);
+    }
+    
+    updatePlayerPosition(deltaTime) {
+        if (!this.playerMovementEnabled || !this.player) return;
+        
+        // Apply movement based on key states
+        if (this.keyStates.left) {
+            this.player.position.x -= this.playerSpeed * deltaTime;
+        }
+        if (this.keyStates.right) {
+            this.player.position.x += this.playerSpeed * deltaTime;
+        }
+        
+        // Global movement boundaries that encompass both bridges
+        // Main bridge is at x=0 with width 10
+        // Upgrade lane is at x=-8 with width 4
+        // Allow movement across the entire range
+        const leftmostBoundary = -10; // Left edge of upgrade lane
+        const rightmostBoundary = 5;  // Right edge of main bridge
+        
+        // Simple boundary check - clamp to min/max values
+        if (this.player.position.x < leftmostBoundary) {
+            this.player.position.x = leftmostBoundary;
+        }
+        if (this.player.position.x > rightmostBoundary) {
+            this.player.position.x = rightmostBoundary;
+        }
+    }
+    
+    updateEnemyCounter() {
+        const counterDiv = document.getElementById('enemy-counter');
+        if (counterDiv) {
+            counterDiv.textContent = `Enemies: ${this.enemies.length}`;
+        }
+    }
+    
+    setupEventListeners() {
+        console.log("Setting up event listeners");
+        
+        // Keyboard event listeners for movement (A and D keys)
+        document.addEventListener('keydown', (event) => {
+            if (event.key.toLowerCase() === 'a') {
+                this.keyStates.left = true;
+            } else if (event.key.toLowerCase() === 'd') {
+                this.keyStates.right = true;
+            }
+        });
+        
+        document.addEventListener('keyup', (event) => {
+            if (event.key.toLowerCase() === 'a') {
+                this.keyStates.left = false;
+            } else if (event.key.toLowerCase() === 'd') {
+                this.keyStates.right = false;
+            }
+        });
+        
+        // Mouse click for firing projectiles
+        document.addEventListener('click', () => {
+            // Get weapon config
+            const weaponConfig = this.weaponsConfig[this.currentWeapon];
+            
+            // Only fire if enough time has passed (based on fire rate)
+            const now = Date.now();
+            if (!this.lastFireTime || now - this.lastFireTime > weaponConfig.fireRate) {
+                this.fireProjectile();
+                this.lastFireTime = now;
+            }
+        });
+        
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            this.camera.aspect = window.innerWidth / window.innerHeight;
+            this.camera.updateProjectionMatrix();
+            this.renderer.setSize(window.innerWidth, window.innerHeight);
+        });
     }
 } 
