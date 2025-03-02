@@ -41,8 +41,8 @@ class Game {
             rocket: 0
         };
         this.baseWeaponDamage = {
-            basic: 1.3, // Store original damage values
-            laser: 0.7,
+            basic: 2, // Store original damage values
+            laser: 1,
             rocket: 5
         };
         
@@ -86,8 +86,8 @@ class Game {
                 model: null,
                 projectileColor: 0xffff00,
                 projectileSpeed: 40,
-                damage: 1.3,
-                fireRate: 200,
+                damage: 2,
+                fireRate: 150,
                 trailColor: 0xffaa00,
                 glowColor: 0xffff88
             },
@@ -95,8 +95,8 @@ class Game {
                 model: null,
                 projectileColor: 0x00ffff,
                 projectileSpeed: 60,
-                damage: 0.7,
-                fireRate: 133,
+                damage: 1,
+                fireRate: 100,
                 trailColor: 0x00ffaa,
                 glowColor: 0x88ffff
             },
@@ -104,8 +104,8 @@ class Game {
                 model: null,
                 projectileColor: 0xff0000,
                 projectileSpeed: 30,
-                damage: 4,
-                fireRate: 1000,
+                damage: 5,
+                fireRate: 800,
                 trailColor: 0xff4400,
                 glowColor: 0xff8888
             }
