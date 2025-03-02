@@ -33,7 +33,7 @@ class Game {
         this.lastSpawnTime = 0;
         this.lastUpgradeTime = 0;
         this.playerMovementEnabled = true;
-        this.maxClones = 5; // Maximum number of clones allowed
+        this.maxClones = 4; // Maximum number of clones allowed
         
         // Difficulty progression
         this.gameStartTime = Date.now();
@@ -187,7 +187,7 @@ class Game {
     
     createBridge() {
         // Create a bridge with walls
-        const bridgeWidth = 10;
+        const bridgeWidth = 16; // Increased from 10 to 16 (60% larger)
         const bridgeLength = 60;
         
         // Bridge base (floor)
@@ -640,7 +640,7 @@ class Game {
         enemyGroup.add(rightArm);
         
         // Randomize position across the bridge width
-        const xPos = (Math.random() - 0.5) * 8; // Spread across bridge width
+        const xPos = (Math.random() - 0.5) * 13; // Increased from 8 to 13 for wider bridge
         enemyGroup.position.set(xPos, isBoss ? 2 : 1, -50); // Far end of the bridge
         
         // Scale boss size
@@ -1282,6 +1282,7 @@ class Game {
             this.currentWave++;
             this.lastWaveChangeTime = currentTime;
             this.updateWaveIndicator();
+            this.updateWaveTimer(); // Update timer immediately after wave change
             
             // Announce new wave with a banner
             this.announceNewWave();
@@ -1725,6 +1726,7 @@ class Game {
         this.updateEnemies(deltaTime);
         this.updateUpgrades(deltaTime);
         this.updateClones(deltaTime); // Add clone updates
+        this.updateWaveTimer(); // Update the wave timer
         
         // Update controls if available
         if (this.controls) {
@@ -1747,11 +1749,11 @@ class Game {
         }
         
         // Global movement boundaries that encompass both bridges
-        // Main bridge is at x=0 with width 10
+        // Main bridge is at x=0 with width 16 (increased from 10)
         // Upgrade lane is at x=-8 with width 4
         // Allow movement across the entire range
         const leftmostBoundary = -10; // Left edge of upgrade lane
-        const rightmostBoundary = 5;  // Right edge of main bridge
+        const rightmostBoundary = 8;  // Right edge of main bridge (increased from 5)
         
         // Simple boundary check - clamp to min/max values
         if (this.player.position.x < leftmostBoundary) {
@@ -1995,7 +1997,25 @@ class Game {
         waveDiv.style.transition = 'all 0.3s ease';
         document.body.appendChild(waveDiv);
         
+        // Create wave countdown timer
+        const timerDiv = document.createElement('div');
+        timerDiv.id = 'wave-timer';
+        timerDiv.style.position = 'absolute';
+        timerDiv.style.top = '90px'; // Below the wave indicator
+        timerDiv.style.left = '50%';
+        timerDiv.style.transform = 'translateX(-50%)';
+        timerDiv.style.padding = '5px 10px';
+        timerDiv.style.backgroundColor = 'rgba(50, 50, 50, 0.7)';
+        timerDiv.style.color = 'white';
+        timerDiv.style.fontFamily = 'Arial, sans-serif';
+        timerDiv.style.fontSize = '14px';
+        timerDiv.style.fontWeight = 'bold';
+        timerDiv.style.borderRadius = '3px';
+        timerDiv.style.zIndex = '100';
+        document.body.appendChild(timerDiv);
+        
         this.updateWaveIndicator();
+        this.updateWaveTimer();
     }
     
     updateWaveIndicator() {
@@ -2012,6 +2032,38 @@ class Game {
                 waveDiv.style.transform = 'translateX(-50%) scale(1)';
                 waveDiv.style.backgroundColor = 'rgba(150, 0, 200, 0.7)';
             }, 300);
+        }
+    }
+    
+    // New method to update the wave countdown timer
+    updateWaveTimer() {
+        const timerDiv = document.getElementById('wave-timer');
+        if (timerDiv) {
+            const currentTime = Date.now();
+            const elapsedTime = currentTime - this.lastWaveChangeTime;
+            const remainingTime = Math.max(0, this.waveChangeTime - elapsedTime);
+            const secondsRemaining = Math.ceil(remainingTime / 1000);
+            
+            // Update timer text
+            timerDiv.textContent = `Next Wave: ${secondsRemaining}s`;
+            
+            // Change appearance as time gets low
+            if (secondsRemaining <= 5) {
+                timerDiv.style.backgroundColor = 'rgba(200, 50, 50, 0.8)';
+                timerDiv.style.color = '#ffffff';
+                
+                // Pulse effect for last 5 seconds
+                const pulseScale = 1 + (Math.sin(Date.now() / 100) + 1) * 0.1;
+                timerDiv.style.transform = `translateX(-50%) scale(${pulseScale})`;
+            } else if (secondsRemaining <= 10) {
+                timerDiv.style.backgroundColor = 'rgba(200, 150, 50, 0.8)';
+                timerDiv.style.color = '#ffffff';
+                timerDiv.style.transform = 'translateX(-50%) scale(1)';
+            } else {
+                timerDiv.style.backgroundColor = 'rgba(50, 50, 50, 0.7)';
+                timerDiv.style.color = 'white';
+                timerDiv.style.transform = 'translateX(-50%) scale(1)';
+            }
         }
     }
     
