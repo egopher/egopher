@@ -19,9 +19,20 @@ class Game {
         this.player = null;
         this.enemies = [];
         this.projectiles = [];
-        this.trees = [];
         this.upgrades = [];
-        this.clones = []; // Added to track player clones
+        this.clones = [];
+        
+        // Weapon upgrade tracking
+        this.weaponUpgradeCounts = {
+            basic: 0,
+            laser: 0,
+            rocket: 0
+        };
+        this.baseWeaponDamage = {
+            basic: 1, // Store original damage values
+            laser: 0.7,
+            rocket: 5
+        };
         
         // Game settings
         this.enemyKills = 0; // Track enemy kills
@@ -29,7 +40,7 @@ class Game {
         this.currentWeapon = 'basic'; // Default weapon
         this.gameSpeed = 1.5; // Increased overall game speed
         this.enemySpawnRate = 800; // Increased spawn rate (ms)
-        this.upgradeSpawnRate = 2000; // Decreased from 5000 to 2000 ms for more frequent upgrades
+        this.upgradeSpawnRate = 1767; // Decreased by 5% more (from 1860ms to 1767ms) for 12% total faster spawning
         this.lastSpawnTime = 0;
         this.lastUpgradeTime = 0;
         this.playerMovementEnabled = true;
@@ -73,8 +84,8 @@ class Game {
                 model: null,
                 projectileColor: 0x00ffff,
                 projectileSpeed: 60,
-                damage: 0.7,
-                fireRate: 100,
+                damage: 0.5,
+                fireRate: 133,
                 trailColor: 0x00ffaa,
                 glowColor: 0x88ffff
             },
@@ -82,7 +93,7 @@ class Game {
                 model: null,
                 projectileColor: 0xff0000,
                 projectileSpeed: 30,
-                damage: 5,
+                damage: 1,
                 fireRate: 1000,
                 trailColor: 0xff4400,
                 glowColor: 0xff8888
@@ -106,6 +117,7 @@ class Game {
         this.createKillCounter();
         this.createHealthBar(); // Add health bar
         this.createWaveIndicator(); // Add wave indicator
+        this.createWeaponIndicator(); // Add weapon indicator
         
         // Clean up any external UI elements
         this.cleanupExternalUI();
@@ -562,51 +574,127 @@ class Game {
         const enemyGroup = new THREE.Group();
         
         // Difficulty scaling factors
-        const waveScaling = Math.min(this.currentWave / 2, 5); // Scale up to 5x for max difficulty
-        const healthScaling = Math.min(1 + (this.currentWave - 1) * 0.3, 3); // Up to 3x health
-        const speedScaling = Math.min(1 + (this.currentWave - 1) * 0.1, 1.5); // Up to 1.5x speed
+        const healthScaling = Math.min(1 + (this.currentWave - 1) * 0.3, 1.5); // Up to 3x health
+        const speedScaling = Math.min(1 + (this.currentWave - 1) * 0.1, 1.1); // Up to 1.5x speed
         
-        // Body
-        const bodyGeometry = new THREE.CapsuleGeometry(
-            isBoss ? 0.8 : 0.5, 
-            isBoss ? 1.5 : 1, 
-            4, 8
+        // Enemy color - bosses are red, regular soldiers are green/camo
+        const primaryColor = isBoss ? 0xff1111 : 0x496b45; // Military green for regular soldiers
+        const secondaryColor = isBoss ? 0xcc0000 : 0x333333; // Dark grey for details
+        const emissiveColor = isBoss ? 0xff0000 : 0x000000; // Bosses glow, soldiers don't
+        
+        // Body - torso
+        const torsoGeometry = new THREE.BoxGeometry(
+            isBoss ? 1.0 : 0.7, 
+            isBoss ? 1.2 : 0.9, 
+            isBoss ? 0.7 : 0.5
         );
-        const bodyMaterial = new THREE.MeshStandardMaterial({ 
-            color: isBoss ? 0xff1111 : 0xe74c3c, // Brighter red for boss
-            roughness: 0.7,
-            metalness: 0.3,
-            emissive: isBoss ? 0xcc0000 : 0x992d22,
-            emissiveIntensity: isBoss ? 0.8 : 0.5 // Increased glow for boss
+        const torsoMaterial = new THREE.MeshStandardMaterial({ 
+            color: primaryColor,
+            roughness: 0.8,
+            metalness: 0.2,
+            emissive: emissiveColor,
+            emissiveIntensity: isBoss ? 0.5 : 0
         });
         
-        const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
-        body.position.y = 0.5;
-        body.castShadow = true;
-        enemyGroup.add(body);
+        const torso = new THREE.Mesh(torsoGeometry, torsoMaterial);
+        torso.position.y = isBoss ? 1.0 : 0.85;
+        torso.castShadow = true;
+        enemyGroup.add(torso);
         
-        // Head (hat)
-        const hatGeometry = new THREE.CylinderGeometry(
-            isBoss ? 0.3 : 0.2, 
-            isBoss ? 0.6 : 0.4, 
-            isBoss ? 0.6 : 0.4, 
-            8
+        // Head
+        const headGeometry = new THREE.SphereGeometry(
+            isBoss ? 0.4 : 0.25, 
+            12, 12
         );
-        const hatMaterial = new THREE.MeshStandardMaterial({ 
-            color: isBoss ? 0xff0000 : 0xff0000,
-            emissive: isBoss ? 0xff0000 : 0xaa0000,
-            emissiveIntensity: isBoss ? 0.9 : 0.6
+        const headMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0xd9ad77, // Skin color
+            roughness: 0.9,
+            metalness: 0.1
         });
-        const hat = new THREE.Mesh(hatGeometry, hatMaterial);
-        hat.position.set(0, isBoss ? 1.5 : 1.2, 0);
-        hat.castShadow = true;
-        enemyGroup.add(hat);
+        const head = new THREE.Mesh(headGeometry, headMaterial);
+        head.position.set(0, isBoss ? 2.0 : 1.5, 0);
+        head.castShadow = true;
+        enemyGroup.add(head);
+        
+        // Helmet
+        const helmetGeometry = new THREE.SphereGeometry(
+            isBoss ? 0.45 : 0.3, 
+            12, 12, 
+            0, Math.PI * 2, 
+            0, Math.PI / 1.5
+        );
+        const helmetMaterial = new THREE.MeshStandardMaterial({ 
+            color: secondaryColor,
+            roughness: 0.5,
+            metalness: 0.6,
+            emissive: emissiveColor,
+            emissiveIntensity: isBoss ? 0.3 : 0
+        });
+        const helmet = new THREE.Mesh(helmetGeometry, helmetMaterial);
+        helmet.position.set(0, isBoss ? 2.0 : 1.5, 0);
+        helmet.rotation.x = -0.2; // Slightly tilted forward
+        helmet.castShadow = true;
+        enemyGroup.add(helmet);
+        
+        // Legs
+        const createLeg = (xOffset) => {
+            const legGeometry = new THREE.BoxGeometry(
+                isBoss ? 0.3 : 0.2, 
+                isBoss ? 1.0 : 0.8, 
+                isBoss ? 0.3 : 0.2
+            );
+            const legMaterial = new THREE.MeshStandardMaterial({
+                color: secondaryColor,
+                roughness: 0.7,
+                metalness: 0.3
+            });
+            const leg = new THREE.Mesh(legGeometry, legMaterial);
+            leg.position.set(
+                xOffset, 
+                isBoss ? 0.5 : 0.4, 
+                0
+            );
+            leg.castShadow = true;
+            return leg;
+        };
+        
+        const leftLeg = createLeg(isBoss ? -0.3 : -0.2);
+        const rightLeg = createLeg(isBoss ? 0.3 : 0.2);
+        enemyGroup.add(leftLeg);
+        enemyGroup.add(rightLeg);
+        
+        // Arms
+        const createArm = (xOffset) => {
+            const armGeometry = new THREE.BoxGeometry(
+                isBoss ? 0.25 : 0.18, 
+                isBoss ? 0.8 : 0.6, 
+                isBoss ? 0.25 : 0.18
+            );
+            const armMaterial = new THREE.MeshStandardMaterial({
+                color: primaryColor,
+                roughness: 0.7,
+                metalness: 0.2
+            });
+            const arm = new THREE.Mesh(armGeometry, armMaterial);
+            arm.position.set(
+                xOffset,
+                isBoss ? 1.0 : 0.85,
+                0
+            );
+            arm.castShadow = true;
+            return arm;
+        };
+        
+        const leftArm = createArm(isBoss ? -0.6 : -0.45);
+        const rightArm = createArm(isBoss ? 0.6 : 0.45);
+        enemyGroup.add(leftArm);
+        enemyGroup.add(rightArm);
         
         // Add boss-specific features
         if (isBoss) {
             // Add spikes to boss
             for (let i = 0; i < 8; i++) {
-                const spikeGeometry = new THREE.ConeGeometry(0.2, 0.5, 4);
+                const spikeGeometry = new THREE.ConeGeometry(0.15, 0.5, 6);
                 const spikeMaterial = new THREE.MeshStandardMaterial({
                     color: 0xdd0000,
                     emissive: 0xaa0000,
@@ -626,19 +714,15 @@ class Game {
             }
             
             // Add glowing eyes
-            const eyeGeometry = new THREE.SphereGeometry(0.1, 8, 8);
-            const eyeMaterial = new THREE.MeshBasicMaterial({
-                color: 0xffff00,
-                emissive: 0xffff00,
-                emissiveIntensity: 1
-            });
+            const eyeGeometry = new THREE.SphereGeometry(0.08, 8, 8);
+            const eyeMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
             
             const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
-            leftEye.position.set(-0.3, 1.5, 0.5);
+            leftEye.position.set(-0.15, 2.0, -0.2);
             enemyGroup.add(leftEye);
             
             const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
-            rightEye.position.set(0.3, 1.5, 0.5);
+            rightEye.position.set(0.15, 2.0, -0.2);
             enemyGroup.add(rightEye);
             
             // Add glow effect
@@ -653,33 +737,14 @@ class Game {
             enemyGroup.add(glow);
         }
         
-        // Arms
-        const armGeometry = new THREE.CapsuleGeometry(
-            isBoss ? 0.3 : 0.2, 
-            isBoss ? 0.9 : 0.6, 
-            4, 8
-        );
-        const armMaterial = new THREE.MeshStandardMaterial({ 
-            color: isBoss ? 0xff2222 : 0xe74c3c,
-            emissive: isBoss ? 0xcc0000 : 0xaa0000,
-            emissiveIntensity: isBoss ? 0.6 : 0.3
-        });
-        
-        const leftArm = new THREE.Mesh(armGeometry, armMaterial);
-        leftArm.position.set(isBoss ? -0.8 : -0.5, 0.5, 0);
-        leftArm.rotation.z = -Math.PI / 4;
-        leftArm.castShadow = true;
-        enemyGroup.add(leftArm);
-        
-        const rightArm = new THREE.Mesh(armGeometry, armMaterial);
-        rightArm.position.set(isBoss ? 0.8 : 0.5, 0.5, 0);
-        rightArm.rotation.z = Math.PI / 4;
-        rightArm.castShadow = true;
-        enemyGroup.add(rightArm);
-        
         // Randomize position across the bridge width
-        const xPos = (Math.random() - 0.5) * 15.6; // Increased from 13 to 15.6 for wider bridge
-        enemyGroup.position.set(xPos, isBoss ? 2 : 1, -50); // Far end of the bridge
+        const minX = -8;
+        const maxX = 8;
+        const xPos = minX + Math.random() * (maxX - minX);
+        
+        // Set the enemy position at the far end of the bridge
+        // Changed y position to 1.5 to match the player's height (projectile height)
+        enemyGroup.position.set(xPos, 1.5, -50); // Far end of the bridge
         
         // Scale boss size
         if (isBoss) {
@@ -695,6 +760,9 @@ class Game {
             damage: isBoss ? 15 : 5 // Bosses do more damage
         };
         
+        // Add health bar above enemy
+        this.createEnemyHealthBar(enemyGroup);
+        
         this.scene.add(enemyGroup);
         this.enemies.push(enemyGroup);
         
@@ -704,9 +772,103 @@ class Game {
         console.log(`${isBoss ? "Boss" : "Enemy"} spawned at position:`, enemyGroup.position);
     }
     
+    // Create a health bar for an enemy
+    createEnemyHealthBar(enemy) {
+        // Create container for the health bar
+        const healthBarGroup = new THREE.Group();
+        
+        // Background for the health bar
+        const bgGeometry = new THREE.PlaneGeometry(1, 0.15);
+        const bgMaterial = new THREE.MeshBasicMaterial({
+            color: 0x000000,
+            transparent: true,
+            opacity: 0.5
+        });
+        const bg = new THREE.Mesh(bgGeometry, bgMaterial);
+        healthBarGroup.add(bg);
+        
+        // Foreground (actual health indicator)
+        const barGeometry = new THREE.PlaneGeometry(1, 0.15);
+        const barMaterial = new THREE.MeshBasicMaterial({
+            color: enemy.userData.isBoss ? 0xff0000 : 0x00ff00,
+            transparent: true,
+            opacity: 0.8
+        });
+        const bar = new THREE.Mesh(barGeometry, barMaterial);
+        bar.position.z = 0.01; // Slightly in front of the background
+        
+        // Store initial scale to properly update later
+        bar.userData.initialWidth = 1;
+        
+        healthBarGroup.add(bar);
+        
+        // Position above the enemy
+        healthBarGroup.position.y = enemy.userData.isBoss ? 3.0 : 2.3;
+        
+        // Make the health bar always face the camera
+        healthBarGroup.rotation.x = -Math.PI / 6; // Tilt slightly for better visibility
+        
+        // Store reference to bar for updates
+        enemy.userData.healthBar = healthBarGroup;
+        enemy.userData.healthFill = bar;
+        enemy.userData.maxHealth = enemy.userData.health; // Store initial health as max
+        
+        // Add to the enemy
+        enemy.add(healthBarGroup);
+    }
+    
+    // Update the health bar of an enemy
+    updateEnemyHealthBar(enemy) {
+        if (!enemy.userData.healthBar || !enemy.userData.healthFill) return;
+        
+        // Calculate health percentage
+        const healthPercent = Math.max(0, enemy.userData.health / enemy.userData.maxHealth);
+        
+        // Update the width of the health bar
+        enemy.userData.healthFill.scale.x = healthPercent;
+        
+        // Position the bar so it shrinks from the right
+        enemy.userData.healthFill.position.x = (1 - healthPercent) * -0.5 * enemy.userData.healthFill.userData.initialWidth;
+    }
+    
     spawnUpgrade() {
-        const upgradeTypes = ['laser', 'rocket', 'basic', 'healthkit', 'clone']; // Added clone upgrade
-        const upgradeType = upgradeTypes[Math.floor(Math.random() * upgradeTypes.length)];
+        // Base upgrade types
+        let upgradeTypes = ['healthkit'];
+        
+        // Add weapon upgrades only if current weapon is not fully upgraded (3 upgrades is max)
+        const currentWeapon = this.currentWeapon;
+        if (this.weaponUpgradeCounts[currentWeapon] < 3) {
+            upgradeTypes.push(currentWeapon); // Add current weapon type
+            
+            // Add other weapon types as possible upgrades
+            ['basic', 'laser', 'rocket'].forEach(type => {
+                if (type !== currentWeapon) {
+                    upgradeTypes.push(type);
+                }
+            });
+        } else {
+            // If current weapon is fully upgraded, only add other weapon types
+            ['basic', 'laser', 'rocket'].forEach(type => {
+                if (type !== currentWeapon) {
+                    upgradeTypes.push(type);
+                }
+            });
+        }
+        
+        // Only add clone upgrade if player has fewer than the max number of clones
+        if (this.clones.length < this.maxClones) {
+            upgradeTypes.push('clone');
+        }
+        
+        // Select random upgrade type
+        let upgradeType = upgradeTypes[Math.floor(Math.random() * upgradeTypes.length)];
+        
+        // Make clone upgrades 10% rarer: if we selected a clone upgrade, there's a 10% chance we'll reroll
+        if (upgradeType === 'clone' && Math.random() < 0.1) {
+            // Remove clone from types and reroll
+            upgradeTypes = upgradeTypes.filter(type => type !== 'clone');
+            upgradeType = upgradeTypes[Math.floor(Math.random() * upgradeTypes.length)];
+        }
         
         // Create upgrade group
         const upgradeGroup = new THREE.Group();
@@ -1317,8 +1479,8 @@ class Game {
                     const outerGeo = new THREE.SphereGeometry(0.3, 12, 12);
                     outerGeo.scale(1, 1, 2); // Elongate
                     const outerMat = new THREE.MeshBasicMaterial({
-                        color: 0x00ffff,
-                        transparent: true,
+                            color: 0x00ffff,
+                            transparent: true,
                         opacity: 0.6
                     });
                     const outer = new THREE.Mesh(outerGeo, outerMat);
@@ -1473,9 +1635,9 @@ class Game {
                         const particleGeo = new THREE.SphereGeometry(0.05, 4, 4);
                         const particleMat = new THREE.MeshBasicMaterial({
                             color: 0x88ffff,
-                            transparent: true,
-                            opacity: 0.8
-                        });
+                    transparent: true,
+                    opacity: 0.8
+                });
                         
                         for (let i = 0; i < 2; i++) {
                             const particle = new THREE.Mesh(particleGeo, particleMat);
@@ -1691,6 +1853,9 @@ class Game {
                         
                         // Damage enemy
                         enemy.userData.health -= projectile.userData.damage;
+                        
+                        // Update enemy health bar
+                        this.updateEnemyHealthBar(enemy);
                         
                         // Remove projectile (except laser which can pierce through)
                         if (projectile.userData.weaponType !== 'laser') {
@@ -1936,12 +2101,39 @@ class Game {
                     this.createHealthkitCollectEffect(upgrade.position);
                 } else if (upgrade.userData.upgradeType === 'clone') {
                     // Spawn a player clone
+                    console.log("Before spawning clone, current count:", this.clones.length);
                     this.spawnPlayerClone();
+                    console.log("After spawning clone, new count:", this.clones.length);
                     this.createUpgradeCollectEffect(upgrade.position);
                 } else {
                     // Weapon upgrade
-                    this.currentWeapon = upgrade.userData.upgradeType;
+                    const weaponType = upgrade.userData.upgradeType;
+                    
+                    // If switching to a different weapon, reset damage to base value
+                    if (this.currentWeapon !== weaponType) {
+                        // Reset current weapon damage to base value
+                        this.weaponsConfig[this.currentWeapon].damage = this.baseWeaponDamage[this.currentWeapon];
+                        this.weaponUpgradeCounts[this.currentWeapon] = 0;
+                        
+                        // Switch to new weapon
+                        this.currentWeapon = weaponType;
+                    }
+                    
+                    // Increment upgrade count for this weapon type
+                    this.weaponUpgradeCounts[weaponType]++;
+                    
+                    // Increase damage by 50% for each upgrade of the same type (after the first)
+                    if (this.weaponUpgradeCounts[weaponType] > 1) {
+                        const baseDamage = this.baseWeaponDamage[weaponType];
+                        const multiplier = 1 + (0.5 * (this.weaponUpgradeCounts[weaponType] - 1));
+                        this.weaponsConfig[weaponType].damage = baseDamage * multiplier;
+                    }
+                    
+                    // Create visual effect
                     this.createUpgradeCollectEffect(upgrade.position);
+                    
+                    // Update weapon indicator
+                    this.updateWeaponIndicator();
                 }
                 
                 // Remove upgrade
@@ -1960,9 +2152,9 @@ class Game {
         // Spawn new upgrades
         const currentTime = Date.now();
         if (currentTime - this.lastUpgradeTime > this.upgradeSpawnRate) {
-            // Increased chance from 15% to 50% to make upgrades more common
-            if (Math.random() < 0.5) {
-                this.spawnUpgrade();
+            // Reduced chance from 50% to 17% (66% reduction in frequency)
+            if (Math.random() < 0.17) {
+            this.spawnUpgrade();
             }
             this.lastUpgradeTime = currentTime;
         }
@@ -2779,78 +2971,75 @@ class Game {
     
     // New method for creating clone model
     createCloneModel() {
-        const cloneGroup = new THREE.Group();
+        // Create a small penguin model for clone upgrade pickup
+        const cloneModelGroup = new THREE.Group();
         
-        // Base (holographic platform)
-        const baseGeometry = new THREE.CylinderGeometry(0.5, 0.6, 0.1, 12);
-        const baseMaterial = new THREE.MeshStandardMaterial({
-            color: 0x00ffff,
-            transparent: true,
-            opacity: 0.7,
-            emissive: 0x00aaff,
-            emissiveIntensity: 0.8
+        // Body - using sphere for penguin's round body (smaller than actual clone)
+        const bodyGeometry = new THREE.SphereGeometry(0.3, 12, 12);
+        bodyGeometry.scale(1, 1.3, 0.8); // Make oval shaped like a penguin body
+        
+        const bodyMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0x222222, // Dark black for penguin back
+            roughness: 0.7,
+            metalness: 0.1,
+            emissive: 0x111111,
+            emissiveIntensity: 0.2
         });
-        const base = new THREE.Mesh(baseGeometry, baseMaterial);
-        cloneGroup.add(base);
         
-        // Clone icon (mini player figure)
-        const iconGeometry = new THREE.SphereGeometry(0.3, 8, 8);
-        const iconMaterial = new THREE.MeshStandardMaterial({
-            color: 0x22aaff,
-            emissive: 0x0066cc,
-            emissiveIntensity: 0.7
+        const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+        body.position.y = 0.1;
+        cloneModelGroup.add(body);
+        
+        // Front belly - white patch
+        const bellyGeometry = new THREE.SphereGeometry(0.25, 12, 12);
+        bellyGeometry.scale(0.8, 1.1, 0.5);
+        
+        const bellyMaterial = new THREE.MeshStandardMaterial({
+            color: 0xeeeeee,
+            roughness: 0.6,
+            metalness: 0.1,
+            emissive: 0x888888,
+            emissiveIntensity: 0.1
         });
-        const icon = new THREE.Mesh(iconGeometry, iconMaterial);
-        icon.position.y = 0.3;
-        cloneGroup.add(icon);
         
-        // Orbiting particle effect
-        for (let i = 0; i < 3; i++) {
-            const particleGeometry = new THREE.SphereGeometry(0.06, 8, 8);
-            const particleMaterial = new THREE.MeshBasicMaterial({
-                color: 0x00ffff,
-                transparent: true,
-                opacity: 0.9
-            });
-            const particle = new THREE.Mesh(particleGeometry, particleMaterial);
-            
-            // Position in orbit
-            const angle = (i / 3) * Math.PI * 2;
-            particle.position.set(
-                Math.cos(angle) * 0.5,
-                0.3,
-                Math.sin(angle) * 0.5
-            );
-            
-            // Store animation data
-            particle.userData = {
-                orbit: {
-                    angle: angle,
-                    radius: 0.5,
-                    speed: 3 + Math.random()
-                }
-            };
-            
-            cloneGroup.add(particle);
-        }
+        const belly = new THREE.Mesh(bellyGeometry, bellyMaterial);
+        belly.position.set(0, 0.05, 0.15);
+        cloneModelGroup.add(belly);
         
-        // Add glow
-        const glowGeometry = new THREE.SphereGeometry(0.6, 16, 16);
+        // Head
+        const headGeometry = new THREE.SphereGeometry(0.2, 12, 12);
+        const headMaterial = new THREE.MeshStandardMaterial({
+            color: 0x111111,
+            roughness: 0.7,
+            metalness: 0.1
+        });
+        
+        const head = new THREE.Mesh(headGeometry, headMaterial);
+        head.position.set(0, 0.4, 0);
+        cloneModelGroup.add(head);
+        
+        // Create a glowing effect around the clone model
+        const glowGeometry = new THREE.SphereGeometry(0.5, 16, 16);
         const glowMaterial = new THREE.MeshBasicMaterial({
-            color: 0x00ddff,
+            color: 0x44ffff,
             transparent: true,
-            opacity: 0.4
+            opacity: 0.3
         });
+        
         const glow = new THREE.Mesh(glowGeometry, glowMaterial);
         glow.position.y = 0.2;
-        cloneGroup.add(glow);
+        cloneModelGroup.add(glow);
         
-        return cloneGroup;
+        return cloneModelGroup;
     }
     
     // New method to spawn a player clone
     spawnPlayerClone() {
-        if (this.clones.length >= this.maxClones) return; // Limit number of clones
+        // Check if already at maximum clones (4)
+        if (this.clones.length >= this.maxClones) {
+            console.log("Maximum clones reached, cannot spawn more");
+            return; 
+        }
         
         // Create a smaller version of the player model (penguin)
         const cloneGroup = new THREE.Group();
@@ -3019,14 +3208,19 @@ class Game {
         // Create spawn effect
         this.createCloneSpawnEffect(cloneGroup.position);
         
+        // Play sound effect
+        const sound = new THREE.Audio(this.listener);
+        
         console.log(`Spawned player clone at position:`, cloneGroup.position);
         
-        // Add counter display if this is the first clone
+        // Remove the creation of clone counter
+        /* 
         if (this.clones.length === 1) {
             this.createCloneCounter();
         } else {
             this.updateCloneCounter();
         }
+        */
     }
     
     // New method to create spawn effect for clones
@@ -3130,6 +3324,73 @@ class Game {
             clone.position.x += clone.userData.side * clone.userData.offset;
             clone.position.y = this.player.position.y - 0.2; // Slightly lower
             
+            // Check for collisions with enemies
+            let collidedWithEnemy = false;
+            for (let j = 0; j < this.enemies.length; j++) {
+                const enemy = this.enemies[j];
+                const distance = clone.position.distanceTo(enemy.position);
+                
+                // If clone is close to enemy, they collide
+                if (distance < 1.5) {
+                    collidedWithEnemy = true;
+                    
+                    // Create explosion effect
+                    const explosionGeometry = new THREE.SphereGeometry(1, 16, 16);
+                    const explosionMaterial = new THREE.MeshBasicMaterial({
+                        color: 0x44ffff,
+                        transparent: true,
+                        opacity: 0.8
+                    });
+                    
+                    const explosion = new THREE.Mesh(explosionGeometry, explosionMaterial);
+                    explosion.position.copy(clone.position);
+                    this.scene.add(explosion);
+                    
+                    // Animate explosion and remove
+                    const startScale = { value: 0.1 };
+                    const targetScale = { value: 2 };
+                    
+                    const animateExplosion = () => {
+                        explosion.scale.set(startScale.value, startScale.value, startScale.value);
+                        explosion.material.opacity = 0.8 * (1 - (startScale.value - 0.1) / 1.9);
+                        
+                        if (startScale.value >= targetScale.value) {
+                            this.scene.remove(explosion);
+                            return;
+                        }
+                        
+                        startScale.value += 0.1;
+                        requestAnimationFrame(animateExplosion);
+                    };
+                    
+                    animateExplosion();
+                    
+                    // Also damage the enemy
+                    if (enemy.userData.health) {
+                        enemy.userData.health -= 1; // Damage enemy by 1 point
+                    }
+                    
+                    break;
+                }
+            }
+            
+            // If collided with enemy, remove the clone
+            if (collidedWithEnemy) {
+                // Remove connection beam if it exists
+                if (clone.userData.connectionBeam) {
+                    clone.remove(clone.userData.connectionBeam);
+                }
+                
+                // Remove clone from scene and array
+                this.scene.remove(clone);
+                this.clones.splice(i, 1);
+                
+                // Removed updating clone counter
+                // this.updateCloneCounter();
+                
+                continue; // Skip rest of logic for this clone
+            }
+            
             // Update connection beam
             if (clone.userData.connectionBeam) {
                 // Calculate distance to player
@@ -3145,9 +3406,69 @@ class Game {
             }
         }
         
+        // Remove clone counter update
+        /* 
         // Update clone counter if needed
         if (this.clones.length > 0) {
             this.updateCloneCounter();
         }
+        */
+    }
+    
+    // Create a weapon indicator to show current weapon and upgrades
+    createWeaponIndicator() {
+        const weaponDiv = document.createElement('div');
+        weaponDiv.id = 'weapon-indicator';
+        weaponDiv.style.position = 'absolute';
+        weaponDiv.style.top = '45px'; // Position below the health bar (10px top + 25px height + 10px margin)
+        weaponDiv.style.right = '10px'; // Align with the health bar on the right
+        weaponDiv.style.padding = '8px 15px';
+        weaponDiv.style.backgroundColor = 'rgba(0, 0, 0, 0.6)';
+        weaponDiv.style.color = 'white';
+        weaponDiv.style.fontFamily = 'Arial, sans-serif';
+        weaponDiv.style.fontSize = '16px';
+        weaponDiv.style.fontWeight = 'bold';
+        weaponDiv.style.borderRadius = '5px';
+        weaponDiv.style.zIndex = '100';
+        weaponDiv.style.textAlign = 'center';
+        weaponDiv.style.display = 'flex';
+        weaponDiv.style.alignItems = 'center';
+        weaponDiv.style.justifyContent = 'center';
+        weaponDiv.style.gap = '10px';
+        
+        // Initial update
+        this.updateWeaponIndicator();
+        
+        document.body.appendChild(weaponDiv);
+    }
+    
+    // Update the weapon indicator
+    updateWeaponIndicator() {
+        const weaponDiv = document.getElementById('weapon-indicator');
+        if (!weaponDiv) return;
+        
+        // Get weapon info
+        const weaponType = this.currentWeapon;
+        const upgradeCount = this.weaponUpgradeCounts[weaponType];
+        const currentDamage = this.weaponsConfig[weaponType].damage;
+        const baseDamage = this.baseWeaponDamage[weaponType];
+        
+        // Format weapon type name
+        const weaponName = weaponType.charAt(0).toUpperCase() + weaponType.slice(1);
+        
+        // Get weapon color
+        let weaponColor = '#ffffff';
+        switch (weaponType) {
+            case 'basic': weaponColor = '#ffff00'; break;
+            case 'laser': weaponColor = '#00ffff'; break;
+            case 'rocket': weaponColor = '#ff4400'; break;
+        }
+        
+        // Create display with weapon info
+        weaponDiv.innerHTML = `
+            <span style="color: ${weaponColor};">${weaponName}</span>
+            <span>+${Math.round((currentDamage - baseDamage) * 100) / 100} DMG</span>
+            <span style="background-color: rgba(255,255,255,0.2); padding: 2px 6px; border-radius: 3px;">×${upgradeCount}</span>
+        `;
     }
 } 
