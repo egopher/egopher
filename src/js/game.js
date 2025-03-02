@@ -66,8 +66,8 @@ class Game {
             0.1,
             1000
         );
-        this.camera.position.set(0, 20, 30); // Repositioned camera to look forward down the bridge
-        this.camera.lookAt(0, 0, 0); // Looking at the center
+        this.camera.position.set(0, 14, 15); // Moved camera closer and lower
+        this.camera.lookAt(0, 0, -10); // Looking at middle of the bridge
         
         // Create renderer
         this.renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -382,11 +382,11 @@ class Game {
     }
     
     fireProjectile() {
-        const projectileGeometry = new THREE.SphereGeometry(0.2, 8, 8);
+        const projectileGeometry = new THREE.SphereGeometry(0.3, 12, 12); // Slightly larger projectile
         const projectileMaterial = new THREE.MeshBasicMaterial({ 
             color: 0xffff00,
             emissive: 0xffcc00,
-            emissiveIntensity: 1.0
+            emissiveIntensity: 1.5
         });
         const projectile = new THREE.Mesh(projectileGeometry, projectileMaterial);
         
@@ -396,23 +396,35 @@ class Game {
         
         // Store projectile properties
         projectile.userData = {
-            velocity: new THREE.Vector3(0, 0, -2.5), // Faster projectiles
+            velocity: new THREE.Vector3(0, 0, -25), // 10x faster projectiles
             damage: 1,
-            life: 2000 // ms before disappearing
+            life: 1000 // Less lifetime since it travels faster
         };
         
         this.scene.add(projectile);
         this.projectiles.push(projectile);
         
-        // Add a simple glow effect
-        const glowGeometry = new THREE.SphereGeometry(0.4, 8, 8);
+        // Add a more intense glow effect
+        const glowGeometry = new THREE.SphereGeometry(0.6, 12, 12);
         const glowMaterial = new THREE.MeshBasicMaterial({ 
             color: 0xffff88,
             transparent: true,
-            opacity: 0.7
+            opacity: 0.8
         });
         const glow = new THREE.Mesh(glowGeometry, glowMaterial);
         projectile.add(glow);
+        
+        // Add trail effect
+        const trailGeometry = new THREE.CylinderGeometry(0.1, 0.1, 1.5, 8);
+        const trailMaterial = new THREE.MeshBasicMaterial({
+            color: 0xffaa00,
+            transparent: true,
+            opacity: 0.6
+        });
+        const trail = new THREE.Mesh(trailGeometry, trailMaterial);
+        trail.rotation.x = Math.PI / 2; // Orient along path
+        trail.position.z = 0.8; // Position behind the projectile
+        projectile.add(trail);
     }
     
     setupEventListeners() {
@@ -471,24 +483,24 @@ class Game {
             case 'rifle':
                 this.projectileConfig = {
                     color: 0xffff00,
-                    speed: 1.5,
-                    rate: 500,
+                    speed: 25,
+                    rate: 300,
                     damage: 1
                 };
                 break;
             case 'machine-gun':
                 this.projectileConfig = {
                     color: 0xff4400,
-                    speed: 2.0,
-                    rate: 200,
+                    speed: 30,
+                    rate: 100,
                     damage: 0.5
                 };
                 break;
             case 'bow':
                 this.projectileConfig = {
                     color: 0x00ffff,
-                    speed: 1.0,
-                    rate: 1000,
+                    speed: 20,
+                    rate: 600,
                     damage: 2
                 };
                 break;
@@ -610,29 +622,40 @@ class Game {
     }
     
     createHitEffect(position) {
-        // Create a simple explosion effect
-        const explosionGeometry = new THREE.SphereGeometry(0.5, 8, 8);
+        // Create a more dramatic explosion effect
+        const explosionGeometry = new THREE.SphereGeometry(0.7, 12, 12);
         const explosionMaterial = new THREE.MeshBasicMaterial({ 
             color: 0xffaa00,
             transparent: true,
-            opacity: 0.8
+            opacity: 0.9
         });
         
         const explosion = new THREE.Mesh(explosionGeometry, explosionMaterial);
         explosion.position.copy(position);
         this.scene.add(explosion);
         
+        // Add a secondary glow for more impact
+        const glowGeometry = new THREE.SphereGeometry(1.2, 12, 12);
+        const glowMaterial = new THREE.MeshBasicMaterial({
+            color: 0xff5500,
+            transparent: true,
+            opacity: 0.5
+        });
+        const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+        explosion.add(glow);
+        
         // Animate and remove
         const startTime = Date.now();
-        const duration = 300; // ms
+        const duration = 200; // Faster animation for more intense feel
         
         const animateExplosion = () => {
             const elapsed = Date.now() - startTime;
-            const scale = 1 + (elapsed / duration) * 2;
+            const scale = 1 + (elapsed / duration) * 3;
             const opacity = 1 - (elapsed / duration);
             
             explosion.scale.set(scale, scale, scale);
             explosionMaterial.opacity = opacity;
+            glowMaterial.opacity = opacity * 0.5;
             
             if (elapsed < duration) {
                 requestAnimationFrame(animateExplosion);
