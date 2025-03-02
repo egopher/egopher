@@ -2276,17 +2276,21 @@ class Game {
         
         // Store bound event handlers for later removal
         this.boundKeyDown = (event) => {
-            if (event.key.toLowerCase() === 'a') {
+            // Use key codes for A and D keys (65 and 68) or arrow keys (37 and 39)
+            // Also support WASD-equivalent keys on different keyboard layouts
+            if (event.code === 'KeyA' || event.code === 'ArrowLeft') {
                 this.keyStates.left = true;
-            } else if (event.key.toLowerCase() === 'd') {
+            } else if (event.code === 'KeyD' || event.code === 'ArrowRight') {
                 this.keyStates.right = true;
             }
         };
         
         this.boundKeyUp = (event) => {
-            if (event.key.toLowerCase() === 'a') {
+            // Use key codes for A and D keys (65 and 68) or arrow keys (37 and 39)
+            // Also support WASD-equivalent keys on different keyboard layouts
+            if (event.code === 'KeyA' || event.code === 'ArrowLeft') {
                 this.keyStates.left = false;
-            } else if (event.key.toLowerCase() === 'd') {
+            } else if (event.code === 'KeyD' || event.code === 'ArrowRight') {
                 this.keyStates.right = false;
             }
         };
