@@ -92,8 +92,13 @@ class Game {
         
         // Create UI elements
         this.createKillCounter();
-        this.createWeaponDisplay();
         this.createHealthBar(); // Add health bar
+        
+        // Clean up any external UI elements
+        this.cleanupExternalUI();
+        
+        // Set up a periodic UI cleanup to handle elements that might be added dynamically
+        setInterval(() => this.cleanupExternalUI(), 1000);
         
         console.log("Game initialization complete");
     }
@@ -726,35 +731,6 @@ class Game {
         }
     }
     
-    createWeaponDisplay() {
-        // Create weapon display
-        const weaponDiv = document.createElement('div');
-        weaponDiv.id = 'weapon-display';
-        weaponDiv.style.position = 'absolute';
-        weaponDiv.style.bottom = '10px';
-        weaponDiv.style.left = '10px';
-        weaponDiv.style.padding = '10px';
-        weaponDiv.style.backgroundColor = 'rgba(0, 0, 0, 0.6)';
-        weaponDiv.style.color = 'white';
-        weaponDiv.style.fontFamily = 'Arial, sans-serif';
-        weaponDiv.style.fontSize = '18px';
-        weaponDiv.style.fontWeight = 'bold';
-        weaponDiv.style.borderRadius = '5px';
-        weaponDiv.style.zIndex = '100';
-        document.body.appendChild(weaponDiv);
-        
-        this.updateWeaponDisplay();
-    }
-    
-    updateWeaponDisplay() {
-        const weaponDiv = document.getElementById('weapon-display');
-        if (weaponDiv) {
-            const weaponName = this.currentWeapon.charAt(0).toUpperCase() + this.currentWeapon.slice(1);
-            const weaponColor = this.getWeaponColor(this.currentWeapon);
-            weaponDiv.innerHTML = `Weapon: <span style="color:${weaponColor}">${weaponName}</span>`;
-        }
-    }
-    
     getWeaponColor(weaponType) {
         switch(weaponType) {
             case 'basic': return '#ffdd00';
@@ -985,7 +961,6 @@ class Game {
                 } else {
                     // Weapon upgrade
                     this.currentWeapon = upgrade.userData.upgradeType;
-                    this.updateWeaponDisplay();
                     this.createUpgradeCollectEffect(upgrade.position);
                 }
                 
@@ -1522,7 +1497,7 @@ class Game {
             document.body.removeChild(gameOverDiv);
             
             // Remove all existing UI elements
-            const uiElements = ['kill-counter', 'weapon-display', 'health-container', 'enemy-counter'];
+            const uiElements = ['kill-counter', 'health-container', 'enemy-counter'];
             uiElements.forEach(id => {
                 const element = document.getElementById(id);
                 if (element) {
@@ -1546,5 +1521,49 @@ class Game {
         document.body.appendChild(gameOverDiv);
         
         console.log("Game Over! Final score:", this.enemyKills);
+    }
+    
+    // Method to remove weapon selection buttons and other external UI elements
+    cleanupExternalUI() {
+        // 1. Remove weapon selection buttons (Rifle, Machine Gun, Bow)
+        const allButtons = document.querySelectorAll('button, div[role="button"], a.button, .btn, [class*="button"]');
+        allButtons.forEach(button => {
+            const buttonText = button.textContent.trim().toLowerCase();
+            if (buttonText === 'rifle' || buttonText === 'machine gun' || buttonText === 'bow') {
+                button.remove();
+            }
+        });
+        
+        // 2. Remove any [1] label on the left
+        const allLabels = document.querySelectorAll('div, span, label');
+        allLabels.forEach(label => {
+            const labelText = label.textContent.trim();
+            if (labelText === '1' || labelText === '[1]') {
+                label.remove();
+            }
+        });
+        
+        // 3. Remove "LAST WAR SURVIVAL" text box
+        const allTextElements = document.querySelectorAll('div, h1, h2, h3, span, p');
+        allTextElements.forEach(element => {
+            const text = element.textContent.trim().toUpperCase();
+            if (text.includes('LAST WAR SURVIVAL')) {
+                element.remove();
+            }
+        });
+        
+        // 4. Special case for the [1] element in the screenshot - find by position
+        const cornerElements = document.querySelectorAll('*');
+        cornerElements.forEach(element => {
+            const rect = element.getBoundingClientRect();
+            // Check if the element is in the top-left corner and is small
+            if (rect.left < 70 && rect.top < 120 && rect.width < 70 && rect.height < 70) {
+                const text = element.textContent.trim();
+                // If it contains just a number or looks like a small label
+                if (/^\d+$/.test(text) || text === '[1]') {
+                    element.remove();
+                }
+            }
+        });
     }
 } 
