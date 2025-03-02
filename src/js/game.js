@@ -12,10 +12,10 @@ class Game {
         this.renderer = null;
         this.controls = null;
         this.clock = new THREE.Clock();
+        this.isMouseDown = false; // Track mouse button state
         
         // Game objects
         this.bridge = null;
-        this.upgradeLane = null;
         this.player = null;
         this.enemies = [];
         this.projectiles = [];
@@ -29,7 +29,7 @@ class Game {
         this.currentWeapon = 'basic'; // Default weapon
         this.gameSpeed = 1.5; // Increased overall game speed
         this.enemySpawnRate = 800; // Increased spawn rate (ms)
-        this.upgradeSpawnRate = 5000; // ms
+        this.upgradeSpawnRate = 2000; // Decreased from 5000 to 2000 ms for more frequent upgrades
         this.lastSpawnTime = 0;
         this.lastUpgradeTime = 0;
         this.playerMovementEnabled = true;
@@ -48,12 +48,14 @@ class Game {
             left: false,  // A key
             right: false  // D key
         };
-        this.playerSpeed = 15; // Faster player movement
+        this.playerSpeed = 17; // Faster player movement
         
         // Store bound event handlers for later removal
         this.boundKeyDown = null;
         this.boundKeyUp = null;
         this.boundMouseClick = null;
+        this.boundMouseDown = null; // Add mousedown handler
+        this.boundMouseUp = null; // Add mouseup handler
         this.boundWindowResize = null;
         
         // Weapons config
@@ -144,7 +146,6 @@ class Game {
         
         // Create bridge and upgrade lane
         this.createBridge();
-        this.createUpgradeLane();
         
         // Create player
         this.createPlayer();
@@ -222,48 +223,6 @@ class Game {
         // Right wall
         const rightWall = new THREE.Mesh(wallGeometry, wallMaterial);
         rightWall.position.set(bridgeWidth/2, wallHeight/2, -20);
-        rightWall.castShadow = true;
-        rightWall.receiveShadow = true;
-        this.scene.add(rightWall);
-    }
-    
-    createUpgradeLane() {
-        // Create a smaller lane for upgrades next to the main bridge
-        const laneWidth = 4;
-        const laneLength = 60;
-        
-        // Lane base (floor)
-        const laneGeometry = new THREE.BoxGeometry(laneWidth, 0.5, laneLength);
-        const laneMaterial = new THREE.MeshStandardMaterial({ 
-            color: 0xBBDDFF, // Light blue for contrast
-            roughness: 0.7,
-            metalness: 0.3
-        });
-        
-        this.upgradeLane = new THREE.Mesh(laneGeometry, laneMaterial);
-        this.upgradeLane.position.set(-8, -0.25, -20); // Positioned to the left of main bridge
-        this.upgradeLane.receiveShadow = true;
-        this.scene.add(this.upgradeLane);
-        
-        // Lane walls
-        const wallHeight = 1;
-        const wallGeometry = new THREE.BoxGeometry(0.5, wallHeight, laneLength);
-        const wallMaterial = new THREE.MeshStandardMaterial({ 
-            color: 0x6699CC,
-            roughness: 0.8,
-            metalness: 0.3
-        });
-        
-        // Left wall
-        const leftWall = new THREE.Mesh(wallGeometry, wallMaterial);
-        leftWall.position.set(-8 - laneWidth/2, wallHeight/2, -20);
-        leftWall.castShadow = true;
-        leftWall.receiveShadow = true;
-        this.scene.add(leftWall);
-        
-        // Right wall
-        const rightWall = new THREE.Mesh(wallGeometry, wallMaterial);
-        rightWall.position.set(-8 + laneWidth/2, wallHeight/2, -20);
         rightWall.castShadow = true;
         rightWall.receiveShadow = true;
         this.scene.add(rightWall);
@@ -824,14 +783,15 @@ class Game {
         }
         
         // Set position on upgrade lane
-        const xPos = -8; // Center of upgrade lane
-        upgradeGroup.position.set(xPos, 1, -50); // Far end of the lane
+        // Position on main bridge like enemies, but with random position
+        const xPos = (Math.random() - 0.5) * 15.6; // Same positioning logic as enemies
+        upgradeGroup.position.set(xPos, 1, -50); // Far end of the bridge
         
         // Store upgrade type
         upgradeGroup.userData = {
             type: 'upgrade',
             upgradeType: upgradeType,
-            speed: 0.15 + Math.random() * 0.05
+            speed: (0.15 + Math.random() * 0.05) * 2.1 // 110% faster than enemies
         };
         
         this.scene.add(upgradeGroup);
@@ -1302,92 +1262,92 @@ class Game {
                 
                 const weaponConfig = this.weaponsConfig[this.currentWeapon];
                 
-                // Create projectile (identical to player)
-                let projectileGeometry;
-                let projectile;
+                // Create the exact same projectile as the player would create
+                // by reusing the fireProjectile logic, but with modified position
                 
-                // Use same projectile geometry as the player based on weapon type
+                let projectileGeometry;
+                
+                // Enhanced projectile geometry based on weapon type - SAME AS PLAYER
                 if (this.currentWeapon === 'rocket') {
-                    // Rocket projectile
-                    projectileGeometry = new THREE.Group();
+                    // Rocket - Detailed missile shape
+                    const rocketGroup = new THREE.Group();
                     
                     // Rocket body
-                    const rocketBody = new THREE.Mesh(
-                        new THREE.CylinderGeometry(0.15, 0.25, 0.8, 8),
-                        new THREE.MeshStandardMaterial({
-                            color: 0xcc3333,
-                            emissive: 0xaa0000,
-                            emissiveIntensity: 0.5
-                        })
-                    );
-                    projectileGeometry.add(rocketBody);
+                    const bodyGeo = new THREE.CylinderGeometry(0.15, 0.25, 0.7, 8);
+                    const bodyMat = new THREE.MeshBasicMaterial({ 
+                        color: 0xff3300,
+                        emissive: 0xff0000
+                    });
+                    const body = new THREE.Mesh(bodyGeo, bodyMat);
+                    rocketGroup.add(body);
+                    
+                    // Rocket nose
+                    const noseGeo = new THREE.ConeGeometry(0.15, 0.3, 8);
+                    const noseMat = new THREE.MeshBasicMaterial({ 
+                        color: 0xff6600
+                    });
+                    const nose = new THREE.Mesh(noseGeo, noseMat);
+                    nose.position.y = 0.5;
+                    rocketGroup.add(nose);
                     
                     // Rocket fins
-                    const finGeometry = new THREE.BoxGeometry(0.1, 0.2, 0.05);
-                    const finMaterial = new THREE.MeshStandardMaterial({
-                        color: 0xdddddd
+                    const finGeo = new THREE.BoxGeometry(0.05, 0.2, 0.2);
+                    const finMat = new THREE.MeshBasicMaterial({ 
+                        color: 0xffaa00
                     });
                     
-                    const finPositions = [
-                        [0, 0, 0.15],
-                        [0, 0, -0.15],
-                        [0.15, 0, 0],
-                        [-0.15, 0, 0]
-                    ];
+                    for (let i = 0; i < 4; i++) {
+                        const fin = new THREE.Mesh(finGeo, finMat);
+                        const angle = (i / 4) * Math.PI * 2;
+                        fin.position.set(
+                            Math.cos(angle) * 0.2,
+                            -0.35,
+                            Math.sin(angle) * 0.2
+                        );
+                        fin.rotation.z = angle;
+                        rocketGroup.add(fin);
+                    }
                     
-                    finPositions.forEach(pos => {
-                        const fin = new THREE.Mesh(finGeometry, finMaterial);
-                        fin.position.set(pos[0], pos[1] - 0.35, pos[2]);
-                        projectileGeometry.add(fin);
-                    });
-                    
-                    // Rocket exhaust
-                    const exhaust = new THREE.Mesh(
-                        new THREE.ConeGeometry(0.2, 0.5, 8),
-                        new THREE.MeshBasicMaterial({
-                            color: 0xff9900,
-                            emissive: 0xff6600,
-                            emissiveIntensity: 1,
-                            transparent: true,
-                            opacity: 0.8
-                        })
-                    );
-                    exhaust.position.set(0, -0.6, 0);
-                    projectileGeometry.add(exhaust);
-                    
-                    projectile = projectileGeometry;
-                    projectile.rotation.x = Math.PI / 2;
+                    projectileGeometry = rocketGroup;
                 } else if (this.currentWeapon === 'laser') {
-                    // Laser beam projectile
+                    // Laser - Energy bolt with core
                     projectileGeometry = new THREE.Group();
                     
-                    // Core beam
-                    const beam = new THREE.Mesh(
-                        new THREE.CylinderGeometry(0.05, 0.05, 1.5, 8),
-                        new THREE.MeshBasicMaterial({
-                            color: 0x00ffff,
-                            emissive: 0x00ffff,
-                            emissiveIntensity: 2,
-                            transparent: true,
-                            opacity: 0.9
-                        })
-                    );
-                    beam.rotation.x = Math.PI / 2;
-                    projectileGeometry.add(beam);
-                    
                     // Outer glow
-                    const glow = new THREE.Mesh(
-                        new THREE.CylinderGeometry(0.15, 0.15, 1.2, 8),
-                        new THREE.MeshBasicMaterial({
-                            color: 0x66ffff,
-                            transparent: true,
-                            opacity: 0.4
-                        })
-                    );
-                    glow.rotation.x = Math.PI / 2;
-                    projectileGeometry.add(glow);
+                    const outerGeo = new THREE.SphereGeometry(0.3, 12, 12);
+                    outerGeo.scale(1, 1, 2); // Elongate
+                    const outerMat = new THREE.MeshBasicMaterial({
+                        color: 0x00ffff,
+                        transparent: true,
+                        opacity: 0.6
+                    });
+                    const outer = new THREE.Mesh(outerGeo, outerMat);
+                    projectileGeometry.add(outer);
                     
-                    projectile = projectileGeometry;
+                    // Inner core
+                    const coreGeo = new THREE.SphereGeometry(0.15, 8, 8);
+                    coreGeo.scale(1, 1, 2.5); // More elongated
+                    const coreMat = new THREE.MeshBasicMaterial({
+                        color: 0xffffff,
+                        emissive: 0x00ffff,
+                        emissiveIntensity: 2
+                    });
+                    const core = new THREE.Mesh(coreGeo, coreMat);
+                    projectileGeometry.add(core);
+                    
+                    // Energy rings
+                    for (let i = 0; i < 3; i++) {
+                        const ringGeo = new THREE.TorusGeometry(0.2, 0.03, 8, 16);
+                        const ringMat = new THREE.MeshBasicMaterial({
+                            color: 0x00ffff,
+                            transparent: true,
+                            opacity: 0.8 - (i * 0.2)
+                        });
+                        const ring = new THREE.Mesh(ringGeo, ringMat);
+                        ring.position.z = -0.3 - (i * 0.2);
+                        ring.rotation.y = Math.PI / 2;
+                        projectileGeometry.add(ring);
+                    }
                 } else {
                     // Basic - Enhanced energy ball
                     projectileGeometry = new THREE.Group();
@@ -1412,49 +1372,268 @@ class Game {
                     const shell = new THREE.Mesh(shellGeo, shellMat);
                     projectileGeometry.add(shell);
                     
-                    projectile = projectileGeometry;
+                    // Orbiting particles
+                    for (let i = 0; i < 8; i++) {
+                        const particleGeo = new THREE.SphereGeometry(0.06, 6, 6);
+                        const particleMat = new THREE.MeshBasicMaterial({
+                            color: 0xffdd00
+                        });
+                        const particle = new THREE.Mesh(particleGeo, particleMat);
+                        
+                        const angle = (i / 8) * Math.PI * 2;
+                        const radius = 0.3;
+                        particle.position.set(
+                            Math.cos(angle) * radius,
+                            Math.sin(angle) * radius,
+                            0
+                        );
+                        
+                        // Add animation data
+                        particle.userData = {
+                            orbitSpeed: 3 + Math.random(),
+                            orbitRadius: radius,
+                            orbitAngle: angle
+                        };
+                        
+                        // Set up animation
+                        const animateParticle = () => {
+                            if (projectileGeometry.parent) {
+                                particle.userData.orbitAngle += 0.05 * particle.userData.orbitSpeed;
+                                particle.position.x = Math.cos(particle.userData.orbitAngle) * particle.userData.orbitRadius;
+                                particle.position.y = Math.sin(particle.userData.orbitAngle) * particle.userData.orbitRadius;
+                                requestAnimationFrame(animateParticle);
+                            }
+                        };
+                        animateParticle();
+                        
+                        projectileGeometry.add(particle);
+                    }
                 }
                 
-                // Start position at clone
+                // Create projectile mesh/group
+                let projectile;
+                if (projectileGeometry instanceof THREE.Group) {
+                    projectile = projectileGeometry;
+                    
+                    // Orient rocket
+                    if (this.currentWeapon === 'rocket') {
+                        projectile.rotation.x = Math.PI / 2;
+                    }
+                } else {
+                    const projectileMaterial = new THREE.MeshBasicMaterial({ 
+                        color: weaponConfig.projectileColor,
+                        emissive: weaponConfig.projectileColor,
+                        emissiveIntensity: 2.0
+                    });
+                    
+                    projectile = new THREE.Mesh(projectileGeometry, projectileMaterial);
+                    
+                    // Orient rocket projectiles
+                    if (this.currentWeapon === 'rocket') {
+                        projectile.rotation.x = Math.PI / 2;
+                    }
+                }
+                
+                // Start position at clone instead of player
                 projectile.position.copy(clone.position);
                 projectile.position.y = clone.position.y + 0.3; // Adjust for clone height
                 
-                // Store projectile properties (same as player)
+                // Store projectile properties
                 projectile.userData = {
                     velocity: new THREE.Vector3(0, 0, -weaponConfig.projectileSpeed),
-                    damage: weaponConfig.damage, // Same damage as player (was 0.7x)
-                    life: 800, // Same lifetime
+                    damage: weaponConfig.damage,
+                    life: 800, // Lifetime
                     weaponType: this.currentWeapon
                 };
                 
                 this.scene.add(projectile);
                 this.projectiles.push(projectile);
                 
-                // Add glow and trail (same as player)
-                const glowGeometry = new THREE.SphereGeometry(
-                    this.currentWeapon === 'rocket' ? 1.0 : 0.8,
-                    12, 12
-                );
-                const glowMaterial = new THREE.MeshBasicMaterial({ 
-                    color: weaponConfig.glowColor,
-                    transparent: true,
-                    opacity: 0.8
-                });
-                const glow = new THREE.Mesh(glowGeometry, glowMaterial);
-                projectile.add(glow);
+                // Add enhanced trail effect
+                let trailGroup = new THREE.Group();
+                projectile.add(trailGroup);
                 
-                // Create muzzle flash effect at clone position
-                const muzzleFlash = new THREE.PointLight(weaponConfig.glowColor, 0.8, 3);
-                muzzleFlash.position.copy(clone.position);
-                muzzleFlash.position.y += 0.3;
-                this.scene.add(muzzleFlash);
-                
-                // Remove muzzle flash after a short time
-                setTimeout(() => {
-                    this.scene.remove(muzzleFlash);
-                }, 100);
-                
-            }, index * 50); // Stagger clone shots by 50ms each
+                if (this.currentWeapon === 'laser') {
+                    // Laser beam trail
+                    const trailGeo = new THREE.CylinderGeometry(0.1, 0.05, 4, 8);
+                    const trailMat = new THREE.MeshBasicMaterial({
+                        color: 0x00ffff,
+                        transparent: true,
+                        opacity: 0.5
+                    });
+                    const trail = new THREE.Mesh(trailGeo, trailMat);
+                    trail.rotation.x = Math.PI / 2;
+                    trail.position.z = 2;
+                    trailGroup.add(trail);
+                    
+                    // Energy particles that fly off
+                    const emitEnergyParticles = () => {
+                        if (!this.projectiles.includes(projectile)) return;
+                        
+                        const particleGeo = new THREE.SphereGeometry(0.05, 4, 4);
+                        const particleMat = new THREE.MeshBasicMaterial({
+                            color: 0x88ffff,
+                            transparent: true,
+                            opacity: 0.8
+                        });
+                        
+                        for (let i = 0; i < 2; i++) {
+                            const particle = new THREE.Mesh(particleGeo, particleMat);
+                            
+                            // Random position near the trail
+                            const offset = 0.15;
+                            particle.position.set(
+                                (Math.random() - 0.5) * offset,
+                                (Math.random() - 0.5) * offset,
+                                projectile.position.z + 0.5 + Math.random()
+                            );
+                            
+                            particle.userData = {
+                                velocity: new THREE.Vector3(
+                                    (Math.random() - 0.5) * 5,
+                                    (Math.random() - 0.5) * 5,
+                                    (Math.random() - 0.5) * 5
+                                ),
+                                life: 30
+                            };
+                            
+                            this.scene.add(particle);
+                            
+                            // Animate and fade out
+                            const animateParticle = () => {
+                                if (particle.userData.life <= 0) {
+                                    this.scene.remove(particle);
+                                    return;
+                                }
+                                
+                                particle.position.x += particle.userData.velocity.x * 0.01;
+                                particle.position.y += particle.userData.velocity.y * 0.01;
+                                particle.position.z += particle.userData.velocity.z * 0.01;
+                                
+                                particle.userData.life--;
+                                particle.material.opacity = particle.userData.life / 30;
+                                
+                                requestAnimationFrame(animateParticle);
+                            };
+                            
+                            animateParticle();
+                        }
+                        
+                        // Continue emitting particles
+                        if (this.projectiles.includes(projectile)) {
+                            setTimeout(() => emitEnergyParticles(), 50);
+                        }
+                    };
+                    
+                    emitEnergyParticles();
+                } else if (this.currentWeapon === 'rocket') {
+                    // Rocket trail - smoke and fire
+                    const createSmokeParticle = () => {
+                        if (!this.projectiles.includes(projectile)) return;
+                        
+                        const smokeGeo = new THREE.SphereGeometry(0.2, 6, 6);
+                        const smokeMat = new THREE.MeshBasicMaterial({
+                            color: 0x555555,
+                            transparent: true,
+                            opacity: 0.4
+                        });
+                        
+                        const smoke = new THREE.Mesh(smokeGeo, smokeMat);
+                        smoke.position.copy(projectile.position);
+                        smoke.position.z += 0.5; // Behind the rocket
+                        
+                        smoke.userData = {
+                            life: 30,
+                            expandRate: 0.03
+                        };
+                        
+                        this.scene.add(smoke);
+                        
+                        // Animate smoke
+                        const animateSmoke = () => {
+                            if (smoke.userData.life <= 0) {
+                                this.scene.remove(smoke);
+                                return;
+                            }
+                            
+                            smoke.scale.x += smoke.userData.expandRate;
+                            smoke.scale.y += smoke.userData.expandRate;
+                            smoke.scale.z += smoke.userData.expandRate;
+                            
+                            smoke.userData.life--;
+                            smoke.material.opacity = (smoke.userData.life / 30) * 0.4;
+                            
+                            requestAnimationFrame(animateSmoke);
+                        };
+                        
+                        animateSmoke();
+                        
+                        // Continue creating smoke
+                        if (this.projectiles.includes(projectile)) {
+                            setTimeout(() => createSmokeParticle(), 50);
+                        }
+                    };
+                    
+                    createSmokeParticle();
+                    
+                    // Add sparks
+                    const emitSparks = () => {
+                        if (!this.projectiles.includes(projectile)) return;
+                        
+                        const sparkGeo = new THREE.SphereGeometry(0.05, 4, 4);
+                        const sparkMat = new THREE.MeshBasicMaterial({
+                            color: 0xffaa00
+                        });
+                        
+                        for (let i = 0; i < 3; i++) {
+                            const spark = new THREE.Mesh(sparkGeo, sparkMat);
+                            spark.position.copy(projectile.position);
+                            spark.position.z += 0.5; // Behind rocket
+                            
+                            // Random direction
+                            const angle = Math.random() * Math.PI * 2;
+                            const speed = 0.1 + Math.random() * 0.1;
+                            
+                            spark.userData = {
+                                velocity: new THREE.Vector3(
+                                    Math.cos(angle) * speed,
+                                    Math.sin(angle) * speed,
+                                    0.1 * (Math.random() - 0.5)
+                                ),
+                                life: 20
+                            };
+                            
+                            this.scene.add(spark);
+                            
+                            // Animate spark
+                            const animateSpark = () => {
+                                if (spark.userData.life <= 0) {
+                                    this.scene.remove(spark);
+                                    return;
+                                }
+                                
+                                spark.position.x += spark.userData.velocity.x;
+                                spark.position.y += spark.userData.velocity.y;
+                                spark.position.z += spark.userData.velocity.z;
+                                
+                                spark.userData.life--;
+                                
+                                requestAnimationFrame(animateSpark);
+                            };
+                            
+                            animateSpark();
+                        }
+                        
+                        // Continue emitting sparks
+                        if (this.projectiles.includes(projectile)) {
+                            setTimeout(() => emitSparks(), 50);
+                        }
+                    };
+                    
+                    emitSparks();
+                }
+
+            }, index * 50); // 50ms delay between each clone's firing
         });
     }
     
@@ -1781,7 +1960,10 @@ class Game {
         // Spawn new upgrades
         const currentTime = Date.now();
         if (currentTime - this.lastUpgradeTime > this.upgradeSpawnRate) {
-            this.spawnUpgrade();
+            // Increased chance from 15% to 50% to make upgrades more common
+            if (Math.random() < 0.5) {
+                this.spawnUpgrade();
+            }
             this.lastUpgradeTime = currentTime;
         }
     }
@@ -2122,6 +2304,18 @@ class Game {
         const deltaTime = Math.min((now - this.lastFrame) / 1000, 0.1); // seconds, with cap to prevent huge jumps
         this.lastFrame = now;
         
+        // Handle continuous firing when mouse is held down
+        if (this.isMouseDown && this.playerMovementEnabled) {
+            // Get weapon config
+            const weaponConfig = this.weaponsConfig[this.currentWeapon];
+            
+            // Only fire if enough time has passed (based on fire rate)
+            if (!this.lastFireTime || now - this.lastFireTime > weaponConfig.fireRate) {
+                this.fireProjectile();
+                this.lastFireTime = now;
+            }
+        }
+        
         // Update game logic
         this.updatePlayerPosition(deltaTime);
         this.updateProjectiles(deltaTime);
@@ -2151,11 +2345,10 @@ class Game {
         }
         
         // Global movement boundaries that encompass both bridges
-        // Main bridge is at x=0 with width 16 (increased from 10)
-        // Upgrade lane is at x=-8 with width 4
-        // Allow movement across the entire range
-        const leftmostBoundary = -10; // Left edge of upgrade lane
-        const rightmostBoundary = 9.6;  // Right edge of main bridge (increased from 8)
+        // Main bridge is at x=0 with width 19.2
+        // Allow movement only within the main bridge
+        const leftmostBoundary = -9.6; // Left edge of main bridge
+        const rightmostBoundary = 9.6;  // Right edge of main bridge
         
         // Simple boundary check - clamp to min/max values
         if (this.player.position.x < leftmostBoundary) {
@@ -2205,6 +2398,16 @@ class Game {
             }
         };
         
+        this.boundMouseDown = () => {
+            // Set mouse button state
+            this.isMouseDown = true;
+        };
+        
+        this.boundMouseUp = () => {
+            // Set mouse button state
+            this.isMouseDown = false;
+        };
+        
         this.boundWindowResize = () => {
             this.camera.aspect = window.innerWidth / window.innerHeight;
             this.camera.updateProjectionMatrix();
@@ -2215,6 +2418,8 @@ class Game {
         document.addEventListener('keydown', this.boundKeyDown);
         document.addEventListener('keyup', this.boundKeyUp);
         document.addEventListener('click', this.boundMouseClick);
+        document.addEventListener('mousedown', this.boundMouseDown);
+        document.addEventListener('mouseup', this.boundMouseUp);
         window.addEventListener('resize', this.boundWindowResize);
     }
     
@@ -2228,6 +2433,12 @@ class Game {
         }
         if (this.boundMouseClick) {
             document.removeEventListener('click', this.boundMouseClick);
+        }
+        if (this.boundMouseDown) {
+            document.removeEventListener('mousedown', this.boundMouseDown);
+        }
+        if (this.boundMouseUp) {
+            document.removeEventListener('mouseup', this.boundMouseUp);
         }
         if (this.boundWindowResize) {
             window.removeEventListener('resize', this.boundWindowResize);
@@ -2306,28 +2517,8 @@ class Game {
         
         // Add click event to restart the game
         restartButton.onclick = () => {
-            // Remove game over screen
-            document.body.removeChild(gameOverDiv);
-            
-            // Remove all existing UI elements
-            const uiElements = ['kill-counter', 'health-container', 'enemy-counter', 'wave-indicator'];
-            uiElements.forEach(id => {
-                const element = document.getElementById(id);
-                if (element) {
-                    element.remove();
-                }
-            });
-            
-            // Remove event listeners to prevent duplicates
-            this.removeEventListeners();
-            
-            // Remove renderer
-            if (this.renderer) {
-                document.body.removeChild(this.renderer.domElement);
-            }
-            
-            // Create a new game
-            window.game = new Game();
+            // Refresh the page instead of creating a new game instance
+            window.location.reload();
         };
         
         gameOverDiv.appendChild(restartButton);
