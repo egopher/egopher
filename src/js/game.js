@@ -24,6 +24,7 @@ class Game {
         
         // Game settings
         this.enemyKills = 0; // Track enemy kills
+        this.playerHealth = 100; // Initialize player health
         this.currentWeapon = 'basic'; // Default weapon
         this.gameSpeed = 1.5; // Increased overall game speed
         this.enemySpawnRate = 800; // Increased spawn rate (ms)
@@ -38,6 +39,12 @@ class Game {
             right: false  // D key
         };
         this.playerSpeed = 15; // Faster player movement
+        
+        // Store bound event handlers for later removal
+        this.boundKeyDown = null;
+        this.boundKeyUp = null;
+        this.boundMouseClick = null;
+        this.boundWindowResize = null;
         
         // Weapons config
         this.weaponsConfig = {
@@ -86,6 +93,7 @@ class Game {
         // Create UI elements
         this.createKillCounter();
         this.createWeaponDisplay();
+        this.createHealthBar(); // Add health bar
         
         console.log("Game initialization complete");
     }
@@ -567,7 +575,7 @@ class Game {
     }
     
     spawnUpgrade() {
-        const upgradeTypes = ['laser', 'rocket', 'basic'];
+        const upgradeTypes = ['laser', 'rocket', 'basic', 'healthkit']; // Add healthkit to possible upgrades
         const upgradeType = upgradeTypes[Math.floor(Math.random() * upgradeTypes.length)];
         
         // Create upgrade group
@@ -576,8 +584,8 @@ class Game {
         // Create base platform
         const baseGeometry = new THREE.BoxGeometry(1.5, 0.2, 1.5);
         const baseMaterial = new THREE.MeshStandardMaterial({ 
-            color: 0x44aaff,
-            emissive: 0x0066cc,
+            color: upgradeType === 'healthkit' ? 0xff4444 : 0x44aaff,
+            emissive: upgradeType === 'healthkit' ? 0xcc2222 : 0x0066cc,
             emissiveIntensity: 0.3
         });
         
@@ -590,7 +598,7 @@ class Game {
         // Add floating effect with glow
         const glowGeometry = new THREE.SphereGeometry(1, 16, 16);
         const glowMaterial = new THREE.MeshBasicMaterial({
-            color: 0x66ccff,
+            color: upgradeType === 'healthkit' ? 0xff6666 : 0x66ccff,
             transparent: true,
             opacity: 0.4
         });
@@ -598,19 +606,35 @@ class Game {
         glow.position.y = 0.5;
         upgradeGroup.add(glow);
         
-        // Add weapon model
-        const weaponModel = this.weaponsConfig[upgradeType].model.clone();
-        weaponModel.position.y = 0.7;
-        weaponModel.scale.set(1.5, 1.5, 1.5);
-        upgradeGroup.add(weaponModel);
-        
-        // Add floating animation
-        const animationStartY = 0.7;
-        weaponModel.userData.floatAnimation = {
-            startY: animationStartY,
-            phase: Math.random() * Math.PI * 2,
-            speed: 2 + Math.random()
-        };
+        // Add model based on upgrade type
+        if (upgradeType === 'healthkit') {
+            // Create health kit model
+            const healthkitModel = this.createHealthkitModel();
+            healthkitModel.position.y = 0.7;
+            upgradeGroup.add(healthkitModel);
+            
+            // Add floating animation
+            const animationStartY = 0.7;
+            healthkitModel.userData.floatAnimation = {
+                startY: animationStartY,
+                phase: Math.random() * Math.PI * 2,
+                speed: 2 + Math.random()
+            };
+        } else {
+            // Add weapon model for non-healthkit upgrades
+            const weaponModel = this.weaponsConfig[upgradeType].model.clone();
+            weaponModel.position.y = 0.7;
+            weaponModel.scale.set(1.5, 1.5, 1.5);
+            upgradeGroup.add(weaponModel);
+            
+            // Add floating animation
+            const animationStartY = 0.7;
+            weaponModel.userData.floatAnimation = {
+                startY: animationStartY,
+                phase: Math.random() * Math.PI * 2,
+                speed: 2 + Math.random()
+            };
+        }
         
         // Set position on upgrade lane
         const xPos = -8; // Center of upgrade lane
@@ -619,7 +643,7 @@ class Game {
         // Store upgrade type
         upgradeGroup.userData = {
             type: 'upgrade',
-            weaponType: upgradeType,
+            upgradeType: upgradeType,
             speed: 0.15 + Math.random() * 0.05
         };
         
@@ -629,13 +653,59 @@ class Game {
         console.log(`Spawned ${upgradeType} upgrade at position:`, upgradeGroup.position);
     }
     
+    createHealthkitModel() {
+        // Create a health kit model (red cross)
+        const healthkitGroup = new THREE.Group();
+        
+        // Base (white box)
+        const baseGeometry = new THREE.BoxGeometry(0.7, 0.3, 0.7);
+        const baseMaterial = new THREE.MeshStandardMaterial({
+            color: 0xffffff,
+            roughness: 0.4,
+            metalness: 0.3
+        });
+        const base = new THREE.Mesh(baseGeometry, baseMaterial);
+        healthkitGroup.add(base);
+        
+        // Red cross - horizontal part
+        const hBarGeometry = new THREE.BoxGeometry(0.6, 0.15, 0.2);
+        const crossMaterial = new THREE.MeshStandardMaterial({
+            color: 0xff0000,
+            emissive: 0xcc0000,
+            emissiveIntensity: 0.5
+        });
+        const hBar = new THREE.Mesh(hBarGeometry, crossMaterial);
+        hBar.position.y = 0.15;
+        healthkitGroup.add(hBar);
+        
+        // Red cross - vertical part
+        const vBarGeometry = new THREE.BoxGeometry(0.2, 0.15, 0.6);
+        const vBar = new THREE.Mesh(vBarGeometry, crossMaterial);
+        vBar.position.y = 0.15;
+        healthkitGroup.add(vBar);
+        
+        // Add glow
+        const glowGeometry = new THREE.SphereGeometry(0.4, 16, 16);
+        const glowMaterial = new THREE.MeshBasicMaterial({
+            color: 0xff4444,
+            transparent: true,
+            opacity: 0.4
+        });
+        const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+        glow.position.y = 0.15;
+        healthkitGroup.add(glow);
+        
+        return healthkitGroup;
+    }
+    
     createKillCounter() {
         // Create kill counter display
         const counterDiv = document.createElement('div');
         counterDiv.id = 'kill-counter';
         counterDiv.style.position = 'absolute';
         counterDiv.style.top = '10px';
-        counterDiv.style.left = '10px';
+        counterDiv.style.left = '50%'; // Center horizontally
+        counterDiv.style.transform = 'translateX(-50%)'; // Ensure true centering
         counterDiv.style.padding = '10px';
         counterDiv.style.backgroundColor = 'rgba(0, 100, 255, 0.7)';
         counterDiv.style.color = 'white';
@@ -844,10 +914,23 @@ class Game {
             
             console.log(`Enemy ${i} moved by ${moveAmount} to position:`, enemy.position);
             
-            // Remove if past player - adjusted to match new player position
+            // Check if enemy reached the end
             if (enemy.position.z > 7) { // Changed to match new player position
+                // Reduce player health when enemy reaches the end
+                this.playerHealth = Math.max(0, this.playerHealth - 5); // Change to 5 damage and prevent negative values
+                this.updateHealthBar();
+                
+                // Create damage effect
+                this.createDamageEffect();
+                
+                // Remove enemy
                 this.scene.remove(enemy);
                 this.enemies.splice(i, 1);
+                
+                // Check if player is dead
+                if (this.playerHealth <= 0) {
+                    this.gameOver();
+                }
             }
         }
         
@@ -876,29 +959,35 @@ class Game {
             const moveAmount = upgrade.userData.speed * deltaTime * this.gameSpeed * 12;
             upgrade.position.z += moveAmount;
             
-            // Animate floating weapon
+            // Animate floating weapon or healthkit
             if (upgrade.children.length > 2) {
-                const weaponModel = upgrade.children[2];
-                const anim = weaponModel.userData.floatAnimation;
+                const model = upgrade.children[2];
+                const anim = model.userData.floatAnimation;
                 
                 if (anim) {
                     const newY = anim.startY + Math.sin(anim.phase + this.clock.getElapsedTime() * anim.speed) * 0.2;
-                    weaponModel.position.y = newY;
+                    model.position.y = newY;
                     
                     // Also rotate slowly
-                    weaponModel.rotation.y += deltaTime * 1.5;
+                    model.rotation.y += deltaTime * 1.5;
                 }
             }
             
             // Check if player collected the upgrade
             const distance = upgrade.position.distanceTo(this.player.position);
             if (distance < 3) {
-                // Apply upgrade
-                this.currentWeapon = upgrade.userData.weaponType;
-                this.updateWeaponDisplay();
-                
-                // Create effect
-                this.createUpgradeCollectEffect(upgrade.position);
+                // Apply upgrade based on type
+                if (upgrade.userData.upgradeType === 'healthkit') {
+                    // Restore health by 10% of max (10 points)
+                    this.playerHealth = Math.min(100, this.playerHealth + 10);
+                    this.updateHealthBar();
+                    this.createHealthkitCollectEffect(upgrade.position);
+                } else {
+                    // Weapon upgrade
+                    this.currentWeapon = upgrade.userData.upgradeType;
+                    this.updateWeaponDisplay();
+                    this.createUpgradeCollectEffect(upgrade.position);
+                }
                 
                 // Remove upgrade
                 this.scene.remove(upgrade);
@@ -1093,6 +1182,154 @@ class Game {
         animateRings();
     }
     
+    createHealthkitCollectEffect(position) {
+        // Create health collection effect (green rings)
+        const radius = 2;
+        const ringsCount = 3;
+        const rings = new THREE.Group();
+        
+        for (let i = 0; i < ringsCount; i++) {
+            const ringGeometry = new THREE.RingGeometry(radius * 0.7, radius, 32);
+            const ringMaterial = new THREE.MeshBasicMaterial({
+                color: 0x22cc44, // Green color for health
+                transparent: true,
+                opacity: 0.7,
+                side: THREE.DoubleSide
+            });
+            
+            const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+            ring.position.copy(position);
+            ring.rotation.x = Math.PI / 2;
+            ring.scale.set(0.1, 0.1, 0.1);
+            ring.userData = {
+                delay: i * 150,
+                startTime: Date.now()
+            };
+            
+            rings.add(ring);
+        }
+        
+        this.scene.add(rings);
+        
+        // Animate rings
+        const duration = 800;
+        
+        const animateRings = () => {
+            let allComplete = true;
+            
+            rings.children.forEach(ring => {
+                const elapsed = Date.now() - ring.userData.startTime - ring.userData.delay;
+                
+                if (elapsed > 0 && elapsed < duration) {
+                    allComplete = false;
+                    const progress = elapsed / duration;
+                    const scale = progress * 2;
+                    const opacity = 1 - progress;
+                    
+                    ring.scale.set(scale, scale, scale);
+                    ring.material.opacity = opacity;
+                }
+                else if (elapsed <= 0) {
+                    allComplete = false;
+                }
+            });
+            
+            if (!allComplete) {
+                requestAnimationFrame(animateRings);
+            } else {
+                this.scene.remove(rings);
+            }
+        };
+        
+        animateRings();
+        
+        // Add healing number popup
+        const healValue = document.createElement('div');
+        healValue.textContent = '+10';
+        healValue.style.position = 'absolute';
+        healValue.style.color = '#22ff22';
+        healValue.style.fontFamily = 'Arial, sans-serif';
+        healValue.style.fontSize = '24px';
+        healValue.style.fontWeight = 'bold';
+        healValue.style.textShadow = '0 0 5px #000';
+        
+        // Convert 3D position to screen coordinates
+        const vector = new THREE.Vector3();
+        vector.copy(position);
+        vector.project(this.camera);
+        
+        const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
+        const y = -(vector.y * 0.5 - 0.5) * window.innerHeight;
+        
+        healValue.style.left = `${x}px`;
+        healValue.style.top = `${y}px`;
+        document.body.appendChild(healValue);
+        
+        // Animate the heal value
+        let startTime = Date.now();
+        const animateHealValue = () => {
+            const elapsed = Date.now() - startTime;
+            if (elapsed < 1000) {
+                // Move up and fade out
+                healValue.style.top = `${y - elapsed/40}px`;
+                healValue.style.opacity = (1 - elapsed/1000).toString();
+                requestAnimationFrame(animateHealValue);
+            } else {
+                document.body.removeChild(healValue);
+            }
+        };
+        
+        animateHealValue();
+    }
+    
+    createHealthBar() {
+        // Create container for health bar
+        const healthContainer = document.createElement('div');
+        healthContainer.id = 'health-container';
+        healthContainer.style.position = 'absolute';
+        healthContainer.style.top = '10px';
+        healthContainer.style.right = '10px';
+        healthContainer.style.width = '200px';
+        healthContainer.style.height = '25px';
+        healthContainer.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+        healthContainer.style.borderRadius = '5px';
+        healthContainer.style.padding = '3px';
+        healthContainer.style.zIndex = '100';
+        
+        // Create the actual health bar
+        const healthBar = document.createElement('div');
+        healthBar.id = 'health-bar';
+        healthBar.style.width = '100%';
+        healthBar.style.height = '100%';
+        healthBar.style.backgroundColor = '#22cc22';
+        healthBar.style.borderRadius = '3px';
+        healthBar.style.transition = 'width 0.3s';
+        
+        // Create text label
+        const healthText = document.createElement('div');
+        healthText.textContent = 'Health: 100%';
+        healthText.style.color = 'white';
+        healthText.style.fontFamily = 'Arial, sans-serif';
+        healthText.style.fontSize = '12px';
+        healthText.style.fontWeight = 'bold';
+        healthText.style.textAlign = 'right';
+        healthText.style.padding = '3px';
+        
+        healthBar.appendChild(healthText);
+        
+        healthContainer.appendChild(healthBar);
+        document.body.appendChild(healthContainer);
+    }
+    
+    updateHealthBar() {
+        const healthBar = document.getElementById('health-bar');
+        if (healthBar) {
+            const healthPercentage = Math.round((this.playerHealth / 100) * 100);
+            healthBar.style.width = `${healthPercentage}%`;
+            healthBar.children[0].textContent = `Health: ${healthPercentage}%`;
+        }
+    }
+    
     animate() {
         requestAnimationFrame(() => this.animate());
         
@@ -1153,25 +1390,24 @@ class Game {
     setupEventListeners() {
         console.log("Setting up event listeners");
         
-        // Keyboard event listeners for movement (A and D keys)
-        document.addEventListener('keydown', (event) => {
+        // Store bound event handlers for later removal
+        this.boundKeyDown = (event) => {
             if (event.key.toLowerCase() === 'a') {
                 this.keyStates.left = true;
             } else if (event.key.toLowerCase() === 'd') {
                 this.keyStates.right = true;
             }
-        });
+        };
         
-        document.addEventListener('keyup', (event) => {
+        this.boundKeyUp = (event) => {
             if (event.key.toLowerCase() === 'a') {
                 this.keyStates.left = false;
             } else if (event.key.toLowerCase() === 'd') {
                 this.keyStates.right = false;
             }
-        });
+        };
         
-        // Mouse click for firing projectiles
-        document.addEventListener('click', () => {
+        this.boundMouseClick = () => {
             // Get weapon config
             const weaponConfig = this.weaponsConfig[this.currentWeapon];
             
@@ -1181,13 +1417,134 @@ class Game {
                 this.fireProjectile();
                 this.lastFireTime = now;
             }
-        });
+        };
         
-        // Handle window resize
-        window.addEventListener('resize', () => {
+        this.boundWindowResize = () => {
             this.camera.aspect = window.innerWidth / window.innerHeight;
             this.camera.updateProjectionMatrix();
             this.renderer.setSize(window.innerWidth, window.innerHeight);
-        });
+        };
+        
+        // Attach event listeners
+        document.addEventListener('keydown', this.boundKeyDown);
+        document.addEventListener('keyup', this.boundKeyUp);
+        document.addEventListener('click', this.boundMouseClick);
+        window.addEventListener('resize', this.boundWindowResize);
+    }
+    
+    // New method to remove event listeners
+    removeEventListeners() {
+        if (this.boundKeyDown) {
+            document.removeEventListener('keydown', this.boundKeyDown);
+        }
+        if (this.boundKeyUp) {
+            document.removeEventListener('keyup', this.boundKeyUp);
+        }
+        if (this.boundMouseClick) {
+            document.removeEventListener('click', this.boundMouseClick);
+        }
+        if (this.boundWindowResize) {
+            window.removeEventListener('resize', this.boundWindowResize);
+        }
+    }
+    
+    // Add damage effect when enemy reaches the end
+    createDamageEffect() {
+        // Flash the screen red to indicate damage
+        const damageOverlay = document.createElement('div');
+        damageOverlay.style.position = 'absolute';
+        damageOverlay.style.top = '0';
+        damageOverlay.style.left = '0';
+        damageOverlay.style.width = '100%';
+        damageOverlay.style.height = '100%';
+        damageOverlay.style.backgroundColor = 'rgba(255, 0, 0, 0.3)';
+        damageOverlay.style.pointerEvents = 'none';
+        damageOverlay.style.zIndex = '200';
+        document.body.appendChild(damageOverlay);
+        
+        // Remove the overlay after a short time
+        setTimeout(() => {
+            document.body.removeChild(damageOverlay);
+        }, 200);
+    }
+    
+    // Game over function
+    gameOver() {
+        // Stop the game
+        this.playerMovementEnabled = false;
+        
+        // Create game over overlay
+        const gameOverDiv = document.createElement('div');
+        gameOverDiv.id = 'game-over';
+        gameOverDiv.style.position = 'absolute';
+        gameOverDiv.style.top = '50%';
+        gameOverDiv.style.left = '50%';
+        gameOverDiv.style.transform = 'translate(-50%, -50%)';
+        gameOverDiv.style.padding = '30px';
+        gameOverDiv.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
+        gameOverDiv.style.color = 'white';
+        gameOverDiv.style.fontFamily = 'Arial, sans-serif';
+        gameOverDiv.style.fontSize = '32px';
+        gameOverDiv.style.fontWeight = 'bold';
+        gameOverDiv.style.borderRadius = '10px';
+        gameOverDiv.style.zIndex = '1000';
+        gameOverDiv.style.textAlign = 'center';
+        
+        // Display game over text with kill count
+        gameOverDiv.innerHTML = `
+            <div>GAME OVER</div>
+            <div style="font-size: 24px; margin-top: 10px;">Final Score: ${this.enemyKills} Kills</div>
+        `;
+        
+        // Create restart button
+        const restartButton = document.createElement('button');
+        restartButton.textContent = 'Play Again';
+        restartButton.style.marginTop = '20px';
+        restartButton.style.padding = '10px 20px';
+        restartButton.style.fontSize = '20px';
+        restartButton.style.backgroundColor = '#4CAF50';
+        restartButton.style.color = 'white';
+        restartButton.style.border = 'none';
+        restartButton.style.borderRadius = '5px';
+        restartButton.style.cursor = 'pointer';
+        
+        // Add hover effect
+        restartButton.onmouseover = function() {
+            this.style.backgroundColor = '#45a049';
+        };
+        restartButton.onmouseout = function() {
+            this.style.backgroundColor = '#4CAF50';
+        };
+        
+        // Add click event to restart the game
+        restartButton.onclick = () => {
+            // Remove game over screen
+            document.body.removeChild(gameOverDiv);
+            
+            // Remove all existing UI elements
+            const uiElements = ['kill-counter', 'weapon-display', 'health-container', 'enemy-counter'];
+            uiElements.forEach(id => {
+                const element = document.getElementById(id);
+                if (element) {
+                    element.remove();
+                }
+            });
+            
+            // Remove event listeners to prevent duplicates
+            this.removeEventListeners();
+            
+            // Remove renderer
+            if (this.renderer) {
+                document.body.removeChild(this.renderer.domElement);
+            }
+            
+            // Create a new game
+            window.game = new Game();
+        };
+        
+        gameOverDiv.appendChild(restartButton);
+        document.body.appendChild(gameOverDiv);
+        
+        console.log("Game Over! Final score:", this.enemyKills);
     }
 } 
